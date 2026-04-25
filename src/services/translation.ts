@@ -8,12 +8,14 @@ import type {
   OpenAIConfig, 
   FetchOpenAIConfig, 
   TranslateOptions,
-  TranslateResult 
+  TranslateResult,
+  LogLevel
 } from '../types';
 import { Logger } from '../utils/logger';
 import { preservedHandle, restoreText } from '../utils/preservedText';
 import { createTranslateMessages } from '../utils/prompt';
 import { fetchOpenAIData } from '../services/openai';
+import { logLevelConfig } from '../config';
 
 /**
  * 翻译服务类
@@ -30,7 +32,7 @@ export class TranslationService {
   ) {
     this.config = openaiConfig;
     this.translationConfig = translationConfig;
-    this.logger = logger || new Logger('info', 'TranslationService');
+    this.logger = logger || new Logger(logLevelConfig, 'TranslationService');
   }
 
   /**
@@ -114,6 +116,8 @@ export class TranslationService {
     const maxRetries = options.retryCount || 3;
     let lastError: string = '';
 
+    this.logger.info(`开始翻译: ${options.sourceLanguage} -> ${options.targetLanguage}`);
+
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
         // 构建提示词
@@ -154,6 +158,7 @@ export class TranslationService {
         if (response.success) {
           // 还原特殊内容
           const restoredText = restoreText(response.content, dictionary);
+          this.logger.info(`翻译成功 (${attempt + 1} 次尝试)`);
           this.logger.debug(`Translation successful after ${attempt + 1} attempt(s)`);
           
           return {
@@ -163,14 +168,15 @@ export class TranslationService {
         }
 
         lastError = response.error;
-        this.logger.warn(`Translation attempt ${attempt + 1} failed: ${lastError}`);
+        this.logger.warn(`翻译尝试 ${attempt + 1} 失败: ${lastError}`);
 
       } catch (error) {
         lastError = error instanceof Error ? error.message : String(error);
-        this.logger.warn(`Translation attempt ${attempt + 1} error: ${lastError}`);
+        this.logger.warn(`翻译尝试 ${attempt + 1} 错误: ${lastError}`);
       }
     }
 
+    this.logger.error(`翻译失败，已达到最大重试次数 ${maxRetries}`);
     return {
       success: false,
       error: `Translation failed after ${maxRetries} attempts. Last error: ${lastError}`,

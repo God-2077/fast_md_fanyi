@@ -6,8 +6,9 @@
 import axios, { AxiosError, type AxiosResponse } from 'axios';
 import type { FetchOpenAIConfig, ResponseData, Message } from '../types';
 import { Logger } from '../utils/logger';
+import { logLevelConfig } from '../config';
 
-const logger = new Logger('debug');
+const logger = new Logger(logLevelConfig, 'openai');
 
 /**
  * 发送请求到 OpenAI API
@@ -58,6 +59,8 @@ async function fetchOpenAIData(config: FetchOpenAIConfig): Promise<ResponseData>
   };
 
   logger.debug(`OpenAI API 请求体: ${JSON.stringify(requestBody)}`);
+
+  logger.info(`发送 OpenAI API 请求到 ${baseURL}/chat/completions`);
 
   // 流式响应处理
   if (stream) {
@@ -207,6 +210,7 @@ function handleJsonResponse(response: AxiosResponse): ResponseData {
   if (status === 200 && data.choices && data.choices.length > 0) {
     const content = data.choices[0]?.message?.content || '';
 
+    logger.info(`OpenAI API 请求成功，响应状态: ${status}`);
     return {
       status,
       success: true,
@@ -215,6 +219,7 @@ function handleJsonResponse(response: AxiosResponse): ResponseData {
     };
   }
 
+  logger.warn('OpenAI API 响应格式无效');
   return {
     status: status || 500,
     success: false,
@@ -248,6 +253,8 @@ function handleRequestError(error: unknown): ResponseData {
   } else {
     errorMessage = String(error);
   }
+
+  logger.error(`OpenAI API 请求失败: ${errorMessage}`);
 
   return {
     status,

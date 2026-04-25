@@ -9,12 +9,12 @@ import fs from 'fs/promises';
 import fm from 'front-matter';
 
 import { Logger } from './utils/logger';
-import { translationConfig, openaiConfig, fileConfig, validateConfig, getConfigSummary } from './config';
+import { translationConfig, openaiConfig, fileConfig, validateConfig, getConfigSummary, logLevelConfig } from './config';
 import { TranslationService } from './services/translation';
 import type { ProcessedFrontMatter } from './types';
 
 // 创建日志记录器
-const logger = new Logger(process.env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error' || 'info', 'main');
+const logger = new Logger(logLevelConfig, 'main');
 
 /**
  * 主函数
