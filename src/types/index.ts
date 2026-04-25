@@ -60,6 +60,7 @@ export interface FileConfig {
   filePath: string;
   preserveFolders: boolean;
   copyOtherFiles: boolean;
+  skipUnchanged: boolean;
 }
 
 // ============== OpenAI API 相关类型 ==============

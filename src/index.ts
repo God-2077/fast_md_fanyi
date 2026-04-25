@@ -12,7 +12,7 @@ import crypto from 'crypto';
 import { Logger } from './utils/logger';
 import { translationConfig, openaiConfig, fileConfig, validateConfig, getConfigSummary, logLevelConfig } from './config';
 import { TranslationService } from './services/translation';
-import type { ProcessedFrontMatter } from './types';
+import type { ProcessedFrontMatter, TranslationMeta } from './types';
 
 // 创建日志记录器
 const logger = new Logger(logLevelConfig, 'main');
@@ -120,12 +120,32 @@ async function processMarkdownFile(
   // 2. 计算原文哈希值
   const contentHash = crypto.createHash('sha256').update(markdownContent).digest('hex');
 
-  // 3. 解析 front-matter 和正文
+  // 3. 构建输出路径
+  const relativePath = path.relative(inputFolder, filePath);
+  const outputPath = path.join(outputBaseFolder, targetLang, relativePath);
+
+  // 4. 检查是否需要跳过（文件已存在且哈希值匹配）
+  if (fileConfig.skipUnchanged) {
+    try {
+      const existingContent = await fs.readFile(outputPath, 'utf-8');
+      const parsed = fm<Record<string, unknown>>(existingContent);
+      const existingMeta = parsed.attributes.translationMeta as TranslationMeta | undefined;
+      
+      if (existingMeta?.sourceHash === contentHash) {
+        fileLogger.info(`原文未变更，跳过翻译: ${path.basename(outputPath)}`);
+        return;
+      }
+    } catch {
+      // 文件不存在，继续翻译
+    }
+  }
+
+  // 5. 解析 front-matter 和正文
   const parsedContent = fm<Record<string, unknown>>(markdownContent);
   const rawFrontMatter = parsedContent.attributes || {};
   const rawMarkdownBody = parsedContent.body || '';
 
-  // 4. 翻译 front-matter 字段
+  // 6. 翻译 front-matter 字段
   const processedFrontMatter = await translateFrontMatter(
     rawFrontMatter,
     sourceLang,
@@ -134,7 +154,7 @@ async function processMarkdownFile(
     fileLogger
   );
 
-  // 5. 翻译 Markdown 正文
+  // 7. 翻译 Markdown 正文
   let translatedBody = rawMarkdownBody;
   if (rawMarkdownBody.trim()) {
     translatedBody = await translationService.translateMarkdown(
@@ -144,20 +164,17 @@ async function processMarkdownFile(
     );
   }
 
-  // 6. 添加翻译元数据到 front-matter
+  // 8. 添加翻译元数据到 front-matter
   processedFrontMatter.translationMeta = {
     translatedAt: new Date().toISOString(),
     model: openaiConfig.model,
     sourceHash: contentHash,
   };
 
-  // 7. 构建输出内容
+  // 9. 构建输出内容
   const finalContent = buildOutputContent(processedFrontMatter, translatedBody);
 
-  // 8. 计算并写入输出路径
-  const relativePath = path.relative(inputFolder, filePath);
-  const outputPath = path.join(outputBaseFolder, targetLang, relativePath);
-
+  // 10. 写入输出文件
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
   await fs.writeFile(outputPath, finalContent, 'utf-8');
 
