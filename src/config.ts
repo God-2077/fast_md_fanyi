@@ -31,10 +31,10 @@ export const translationConfig: TranslationConfig = {
       fullName: '英文',
       shortName: 'en',
     },
-    {
-      fullName: '日文',
-      shortName: 'ja',
-    },
+    // {
+      // fullName: '日文',
+      // shortName: 'ja',
+    // },
   ],
   // 需要翻译的 front-matter 字段
   frontMatter: [
