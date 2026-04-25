@@ -94,8 +94,9 @@ export function preservedHandle(
     length: number;
     original: string;
     placeholder: string;
-  }
-  
+}
+
+  // 收集所有匹配项
   const matches: Match[] = [];
   
   for (const pattern of allPatterns) {
@@ -111,24 +112,8 @@ export function preservedHandle(
         continue;
       }
       
-      // 跳过被包含在已保护占位符中的匹配
-      const isProtectedContent = Array.from(dictionary.entries()).some(
-        ([orig, placeholder]) => placeholder === original && orig === placeholder
-      );
-      if (isProtectedContent) {
-        continue;
-      }
-      
-      // 跳过与已保护占位符位置重叠的匹配
-      const overlapsWithProtected = Array.from(dictionary.entries()).some(([orig]) => {
-        const idx = text.indexOf(orig);
-        return idx >= 0 && match!.index >= idx && match!.index < idx + orig.length;
-      });
-      if (overlapsWithProtected) {
-        continue;
-      }
-      
-      if (matches.some(m => m.index === match!.index && m.original === original)) {
+      // 跳过与字典中已有内容完全相同的匹配（同一文本不应重复保护）
+      if (dictionary.has(original)) {
         continue;
       }
       
@@ -136,17 +121,47 @@ export function preservedHandle(
         index: match.index,
         length: original.length,
         original,
-        placeholder: '', // 稍后填充
+        placeholder: '',
       });
     }
   }
-
-  // 按位置从后往前排序
-  matches.sort((a, b) => b.index - a.index);
+  
+  // 过滤重叠匹配：先按长度降序，再按位置升序排序
+  matches.sort((a, b) => {
+    if (b.length !== a.length) return b.length - a.length;
+    return a.index - b.index;
+  });
+  
+  const filteredMatches: Match[] = [];
+  for (const match of matches) {
+    const matchEnd = match.index + match.length;
+    // 检查是否被已过滤的匹配包含（完全包含关系）
+    const isContained = filteredMatches.some(
+      existing => existing.index <= match.index && (existing.index + existing.length) >= matchEnd
+    );
+    if (!isContained) {
+      filteredMatches.push(match);
+    }
+  }
+  
+  // 按位置从后往前排序，这样从后往前替换时位置不会错
+  filteredMatches.sort((a, b) => b.index - a.index);
 
   // 生成占位符并记录映射
   let resultText = text;
-  for (const match of matches) {
+  const protectedRanges: { start: number; end: number }[] = [];
+  
+  for (const match of filteredMatches) {
+    const matchEnd = match.index + match.length;
+    
+    // 检查与已保护范围是否重叠
+    const overlapsWithProtected = protectedRanges.some(
+      range => match.index < range.end && matchEnd > range.start
+    );
+    if (overlapsWithProtected) {
+      continue;
+    }
+    
     let placeholder = dictionary.get(match.original);
     
     if (!placeholder) {
@@ -170,6 +185,10 @@ export function preservedHandle(
     resultText = resultText.slice(0, match.index) + 
                  match.placeholder + 
                  resultText.slice(match.index + match.length);
+    
+    // 记录保护范围
+    const placeholderEnd = match.index + placeholder.length;
+    protectedRanges.push({ start: match.index, end: placeholderEnd });
   }
 
   return {
@@ -192,18 +211,17 @@ export function restoreText(processedText: string, dictionary: Map<string, strin
 
   let restoredText = processedText;
   
-  // 按占位符长度逆序排列，避免部分匹配问题
+  // 获取所有占位符，按长度从长到短排序
   const entries = Array.from(dictionary.entries())
     .sort(([, a], [, b]) => b.length - a.length);
 
   for (const [original, placeholder] of entries) {
-    // 使用安全的方式构建正则表达式
-    const placeholderId = extractPlaceholderId(placeholder);
-    if (!placeholderId) continue;
+    if (!placeholder.startsWith(PLACEHOLDER_PREFIX) || !placeholder.endsWith(PLACEHOLDER_SUFFIX)) {
+      continue;
+    }
     
-    const escapedPlaceholder = escapeRegExp(placeholder);
-    const regex = new RegExp(escapedPlaceholder, 'g');
-    restoredText = restoredText.replace(regex, original);
+    // Use string replace instead of regex to avoid $ being interpreted as group reference
+    restoredText = restoredText.split(placeholder).join(original);
   }
 
   return restoredText;
