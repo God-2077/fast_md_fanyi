@@ -82,7 +82,7 @@ export const openaiConfig: OpenAIConfig = {
   // 最大输出 token 数
   maxTokens: 8000,
   // 是否使用流式输出
-  stream: false,
+  stream: true,
   // 系统提示词模板
   promptTemplate: '你是一个专业的翻译助手，负责将用户输入的文本内容从{sourceLanguage}翻译为{targetLanguage}。请保持原文的格式(markdown)和语气，只翻译内容，保留类似 <PTX_abc123> 的特殊内容，不要添加额外的解释。',
   // 请求超时时间（毫秒）
@@ -97,7 +97,7 @@ export const openaiConfig: OpenAIConfig = {
  * 文件配置
  */
 export const fileConfig: FileConfig = {
-  inputFolder: 'i',
+  inputFolder: 'input',
   // 忽略的文件或文件夹
   ignore: [
     'node_modules',
