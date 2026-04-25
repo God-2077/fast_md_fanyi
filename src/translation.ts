@@ -33,6 +33,7 @@ export async function translateMarkdown(text: string,sourceLanguage: string, tar
             return restoredText;
         }
         retryCount++;
+        logger.info(`Translation failed, error: ${response.error}`);
     }
     throw new Error("Translation failed after retryCount attempts");
     

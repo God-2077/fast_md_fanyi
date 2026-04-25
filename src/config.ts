@@ -38,13 +38,13 @@ export const translationConfig: TranslationConfig = {
     ],
     // 保留字段
     preservedFields: [
-        RegExp("example"),
+        RegExp("example", "g"),
         // 代码块
         /```([a-z]+)?\n([\s\S]*?)\n```/g
     ],
     // 保留术语
     preservedTerms: [
-        RegExp("token"),
+        RegExp("token", "g"),
     ],
 };
 
