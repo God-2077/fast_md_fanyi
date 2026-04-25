@@ -1,27 +1,18 @@
-import { preservedHandle } from '../utils/preservedText';
-import { translationConfig } from '../config';
+import { preservedHandle, restoreText } from '../utils/preservedText';
 
+const testPatterns = [
+  /API/gi,
+  /abc/gi,
+];
 
-const text = `
-## 认证
+const text = `PTX 中的 abc 不该会被替换， 如 <PTX_abc123>`;
 
-Umami API 需要认证，可以是使用 用户的 API 密钥 或是 使用网站分享中的 API 密钥 \`x-umami-share-token\`。
+const 预期 = "PTX 中的 <PTX_moejg6k8_exhagqpl_2> 不该会被替换，如 <PTX_abc123>"
+console.log('原始文本:', text);
 
-\`\`\`json
-{
-  "username": "your-username",
-  "password": "your-password"
-}
-\`\`\`
-`;
-const preservedText = preservedHandle(text, translationConfig.preservedFields, translationConfig.preservedTerms);
-console.log(preservedText.text);
+const preserved = preservedHandle(text, testPatterns, []);
+console.log('\n处理后:', preserved.text);
+console.log('字典:', Array.from(preserved.dictionary.entries()));
 
-
-## 认证
-
-Umami <PTX_moeh26pe_et7n6sbr_5> 需要认证，可以是使用 用户的 <PTX_moeh26pe_et7n6sbr_5> 密钥 或是 使用网站分享中的 <PTX_moeh26pe_et7n6sbr_5> 密钥 <PTX_moeh26pe_89anaclx_4>oeh26pe_oz2yrnrm_3>`。
-
-
-
-<PTX_moeh26pe_2de7yji2_2>
+const restored = restoreText(preserved.text, preserved.dictionary);
+console.log('\n还原后:', restored);
