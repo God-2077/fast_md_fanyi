@@ -107,8 +107,9 @@ async function processMarkdownFile(
   translationService: TranslationService,
   fileLogger: Logger
 ): Promise<void> {
-  // 1. 读取文件
-  const markdownContent = await fs.readFile(filePath, 'utf-8');
+  // 1. 读取文件并转换换行符 (CR → LF, CR+LF → LF)
+  let markdownContent = await fs.readFile(filePath, 'utf-8');
+  markdownContent = markdownContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   
   if (!markdownContent.trim()) {
     fileLogger.warn('文件内容为空，跳过');
