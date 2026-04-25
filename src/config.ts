@@ -75,20 +75,20 @@ export const openaiConfig: OpenAIConfig = {
   // API 基础地址
   baseURL: process.env.OPENAI_BASE_URL || 'https://api.siliconflow.cn/v1',
   // 模型名称
-  model: process.env.OPENAI_MODEL || 'Qwen/Qwen2.5-7B-Instruct',
+  model: process.env.OPENAI_MODEL || 'Qwen/Qwen3-8B',
 //   Qwen/Qwen3-8B Qwen/Qwen2.5-7B-Instruct
   // 温度参数 (0-1)
-  temperature: 0.7,
+  temperature: 0.5,
   // 最大输出 token 数
-  maxTokens: 8000,
+  maxTokens: 1000,
   // 是否使用流式输出
   stream: true,
   // 系统提示词模板
   promptTemplate: '你是一个专业的翻译助手，负责将用户输入的文本内容从{sourceLanguage}翻译为{targetLanguage}。请保持原文的格式(markdown)和语气，只翻译内容，保留类似 <PTX_abc123> 的特殊内容，不要添加额外的解释。',
   // 请求超时时间（毫秒）
-  timeout: 1000 * 60 * 5, // 5 分钟
+  timeout: 1000 * 60, // 5 分钟
   // 并发请求数
-  threadCount: 1,
+  threadCount: 3,
   // 重试次数
   retryCount: 3,
 };
