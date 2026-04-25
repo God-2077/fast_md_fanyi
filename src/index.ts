@@ -111,6 +111,13 @@ async function main(): Promise<void> {
   // 记录所有输出文件路径
   const outputFilesRecord = new Set<string>();
 
+  // 总统计
+  let totalFilesTranslated = 0;
+  let totalFilesSkipped = 0;
+  let totalCopiedFiles = 0;
+  let totalTokensUsed = 0;
+  const startTime = Date.now();
+
   // 按目标语言处理
   for (const target of targets) {
     const targetLang = target.shortName;
@@ -122,8 +129,9 @@ async function main(): Promise<void> {
       const markdownFile = markdownFiles[index];
       targetLogger.info(`翻译文件 [${index + 1}/${markdownFiles.length}]: ${path.basename(markdownFile)}`);
 
+      const fileStartTime = Date.now();
       try {
-        const outputPath = await processMarkdownFile(
+        const result = await processMarkdownFile(
           markdownFile,
           inputFolder,
           outputBaseFolder,
@@ -132,7 +140,25 @@ async function main(): Promise<void> {
           translationService,
           targetLogger
         );
-        outputFilesRecord.add(outputPath);
+        
+        if (result.skipped) {
+          totalFilesSkipped++;
+        } else {
+          outputFilesRecord.add(result.outputPath);
+          totalFilesTranslated++;
+          if (result.usage) {
+            totalTokensUsed += result.usage.totalTokens;
+          }
+        }
+        
+        const fileElapsed = Date.now() - fileStartTime;
+        if (result.usage) {
+          targetLogger.info(
+            `耗时: ${(fileElapsed / 1000).toFixed(2)}s, Tokens: ${result.usage.totalTokens}`
+          );
+        } else if (result.skipped) {
+          targetLogger.info(`跳过 (原文未变更), 耗时: ${(fileElapsed / 1000).toFixed(2)}s`);
+        }
       } catch (error) {
         targetLogger.error(`处理文件时发生错误: ${markdownFile}`, error);
         // 跳过当前文件，继续处理下一个
@@ -149,13 +175,19 @@ async function main(): Promise<void> {
       for (const f of copiedFiles) {
         outputFilesRecord.add(f);
       }
+      totalCopiedFiles += copiedFiles.length;
     }
 
     // 清理输出目录中未记录的文件
     await cleanupOutputFolder(path.join(outputBaseFolder, targetLang), outputFilesRecord, targetLogger);
   }
 
+  const totalElapsed = Date.now() - startTime;
   logger.info('=== 所有文件翻译完成 ===');
+  logger.info(
+    `翻译: ${totalFilesTranslated} 个文件, 跳过: ${totalFilesSkipped} 个文件, 复制: ${totalCopiedFiles} 个文件`
+  );
+  logger.info(`总耗时: ${(totalElapsed / 1000).toFixed(2)}s, 总Tokens: ${totalTokensUsed}`);
 }
 
 /**
@@ -169,14 +201,14 @@ async function processMarkdownFile(
   targetLang: string,
   translationService: TranslationService,
   fileLogger: Logger
-): Promise<string> {
+): Promise<{ outputPath: string; skipped: boolean; usage?: { totalTokens: number } }> {
   // 1. 读取文件并转换换行符 (CR → LF, CR+LF → LF)
   let markdownContent = await fs.readFile(filePath, 'utf-8');
   markdownContent = markdownContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   
   if (!markdownContent.trim()) {
     fileLogger.warn('文件内容为空，跳过');
-    return '';
+    return { outputPath: '', skipped: false };
   }
 
   // 2. 计算原文哈希值
@@ -195,7 +227,7 @@ async function processMarkdownFile(
       
       if (existingMeta?.sourceHash === contentHash) {
         fileLogger.info(`原文未变更，跳过翻译: ${path.basename(outputPath)}`);
-        return outputPath;
+        return { outputPath, skipped: true };
       }
     } catch {
       // 文件不存在，继续翻译
@@ -208,7 +240,7 @@ async function processMarkdownFile(
   const rawMarkdownBody = parsedContent.body || '';
 
   // 6. 翻译 front-matter 字段
-  const processedFrontMatter = await translateFrontMatter(
+  const { frontMatter: processedFrontMatter, usage: frontMatterUsage } = await translateFrontMatter(
     rawFrontMatter,
     sourceLang,
     targetLang,
@@ -218,12 +250,15 @@ async function processMarkdownFile(
 
   // 7. 翻译 Markdown 正文
   let translatedBody = rawMarkdownBody;
+  let bodyUsage: { totalTokens: number } | undefined;
   if (rawMarkdownBody.trim()) {
-    translatedBody = await translationService.translateMarkdown(
+    const bodyResult = await translationService.translateMarkdown(
       rawMarkdownBody,
       sourceLang,
       targetLang
     );
+    translatedBody = bodyResult.translatedText;
+    bodyUsage = bodyResult.usage;
   }
 
   // 8. 添加翻译元数据到 front-matter
@@ -242,7 +277,12 @@ async function processMarkdownFile(
 
   fileLogger.info(`已生成: ${path.basename(outputPath)}`);
 
-  return outputPath;
+  const totalUsage = (frontMatterUsage?.totalTokens || 0) + (bodyUsage?.totalTokens || 0);
+  return {
+    outputPath,
+    skipped: false,
+    usage: totalUsage > 0 ? { totalTokens: totalUsage } : undefined,
+  };
 }
 
 /**
@@ -254,8 +294,9 @@ async function translateFrontMatter(
   targetLang: string,
   translationService: TranslationService,
   fileLogger: Logger
-): Promise<ProcessedFrontMatter> {
+): Promise<{ frontMatter: ProcessedFrontMatter; usage?: { totalTokens: number } }> {
   const processed: ProcessedFrontMatter = { ...frontMatter };
+  let totalUsage = 0;
 
   for (const fieldConfig of translationConfig.frontMatter) {
     const { field, type } = fieldConfig;
@@ -267,26 +308,32 @@ async function translateFrontMatter(
 
     try {
       if (type === 'string' && typeof originalValue === 'string') {
-        processed[field] = await translationService.translateText(
+        const result = await translationService.translateText(
           originalValue,
           sourceLang,
           targetLang
         );
+        processed[field] = result.translatedText;
+        if (result.usage) totalUsage += result.usage.totalTokens;
       } else if (type === 'string[]' && Array.isArray(originalValue)) {
-        processed[field] = await translationService.translateBatch(
+        const result = await translationService.translateBatch(
           originalValue.filter((item): item is string => typeof item === 'string'),
           sourceLang,
           targetLang
         );
+        processed[field] = result.translations;
+        if (result.usage) totalUsage += result.usage.totalTokens;
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       fileLogger.warn(`翻译 front-matter 字段 "${field}" 时出错，保留原始值: ${errorMsg}`);
-      // 出错时保留原始值
     }
   }
 
-  return processed;
+  return {
+    frontMatter: processed,
+    usage: totalUsage > 0 ? { totalTokens: totalUsage } : undefined,
+  };
 }
 
 /**

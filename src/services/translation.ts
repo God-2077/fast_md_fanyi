@@ -41,7 +41,7 @@ export class TranslationService {
     text: string,
     sourceLanguage: string,
     targetLanguage: string
-  ): Promise<string> {
+  ): Promise<{ translatedText: string; usage?: { totalTokens: number } }> {
     const options: TranslateOptions = {
       sourceLanguage,
       targetLanguage,
@@ -59,7 +59,10 @@ export class TranslationService {
       throw new Error(result.error || 'Translation failed');
     }
 
-    return result.translatedText!;
+    return {
+      translatedText: result.translatedText!,
+      usage: result.usage,
+    };
   }
 
   /**
@@ -69,7 +72,7 @@ export class TranslationService {
     text: string,
     sourceLanguage: string,
     targetLanguage: string
-  ): Promise<string> {
+  ): Promise<{ translatedText: string; usage?: { totalTokens: number } }> {
     const options: TranslateOptions = {
       sourceLanguage,
       targetLanguage,
@@ -87,7 +90,10 @@ export class TranslationService {
       throw new Error(result.error || 'Translation failed');
     }
 
-    return result.translatedText!;
+    return {
+      translatedText: result.translatedText!,
+      usage: result.usage,
+    };
   }
 
   /**
@@ -97,10 +103,18 @@ export class TranslationService {
     texts: string[],
     sourceLanguage: string,
     targetLanguage: string
-  ): Promise<string[]> {
-    return Promise.all(
+  ): Promise<{ translations: string[]; usage?: { totalTokens: number } }> {
+    const results = await Promise.all(
       texts.map(text => this.translateText(text, sourceLanguage, targetLanguage))
     );
+    
+    const translations = results.map(r => r.translatedText);
+    const totalUsage = results.reduce((sum, r) => sum + (r.usage?.totalTokens || 0), 0);
+    
+    return {
+      translations,
+      usage: totalUsage > 0 ? { totalTokens: totalUsage } : undefined,
+    };
   }
 
   /**
@@ -163,6 +177,7 @@ export class TranslationService {
           return {
             success: true,
             translatedText: restoredText,
+            usage: response.usage,
           };
         }
 

@@ -108,6 +108,11 @@ export interface ResponseData {
   success: boolean;
   content: string;
   error: string;
+  usage?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
 }
 
 // ============== 保留内容处理相关类型 ==============
@@ -138,6 +143,11 @@ export interface TranslateResult {
   success: boolean;
   translatedText?: string;
   error?: string;
+  usage?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
 }
 
 // ============== 日志相关类型 ==============
