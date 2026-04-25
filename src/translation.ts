@@ -68,3 +68,13 @@ export async function translateText(text: string,sourceLanguage: string, targetL
     throw new Error("Translation failed after retryCount attempts");
     
 }
+
+
+async function test() {
+// 测试
+const testText = "你好，我是一个学生。";
+const testMarkdown = `# ${testText}\n 这是一个测试。\n`;
+const testMarkdownTranslated = await translateMarkdown(testMarkdown, "zh", "en");
+console.log(testMarkdownTranslated);
+}
+test();
