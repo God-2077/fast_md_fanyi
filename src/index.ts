@@ -7,6 +7,7 @@ import { glob } from 'glob';
 import path from 'path';
 import fs from 'fs/promises';
 import fm from 'front-matter';
+import crypto from 'crypto';
 
 import { Logger } from './utils/logger';
 import { translationConfig, openaiConfig, fileConfig, validateConfig, getConfigSummary, logLevelConfig } from './config';
@@ -116,12 +117,15 @@ async function processMarkdownFile(
     return;
   }
 
-  // 2. 解析 front-matter 和正文
+  // 2. 计算原文哈希值
+  const contentHash = crypto.createHash('sha256').update(markdownContent).digest('hex');
+
+  // 3. 解析 front-matter 和正文
   const parsedContent = fm<Record<string, unknown>>(markdownContent);
   const rawFrontMatter = parsedContent.attributes || {};
   const rawMarkdownBody = parsedContent.body || '';
 
-  // 3. 翻译 front-matter 字段
+  // 4. 翻译 front-matter 字段
   const processedFrontMatter = await translateFrontMatter(
     rawFrontMatter,
     sourceLang,
@@ -130,7 +134,7 @@ async function processMarkdownFile(
     fileLogger
   );
 
-  // 4. 翻译 Markdown 正文
+  // 5. 翻译 Markdown 正文
   let translatedBody = rawMarkdownBody;
   if (rawMarkdownBody.trim()) {
     translatedBody = await translationService.translateMarkdown(
@@ -140,10 +144,17 @@ async function processMarkdownFile(
     );
   }
 
-  // 5. 构建输出内容
+  // 6. 添加翻译元数据到 front-matter
+  processedFrontMatter.translationMeta = {
+    translatedAt: new Date().toISOString(),
+    model: openaiConfig.model,
+    sourceHash: contentHash,
+  };
+
+  // 7. 构建输出内容
   const finalContent = buildOutputContent(processedFrontMatter, translatedBody);
 
-  // 6. 计算并写入输出路径
+  // 8. 计算并写入输出路径
   const relativePath = path.relative(inputFolder, filePath);
   const outputPath = path.join(outputBaseFolder, targetLang, relativePath);
 
@@ -214,6 +225,11 @@ function buildOutputContent(
     const value = frontMatter[key];
     if (Array.isArray(value)) {
       return `${key}: [${value.map(item => JSON.stringify(item)).join(', ')}]`;
+    } else if (typeof value === 'object' && value !== null) {
+      const nestedLines = Object.entries(value as Record<string, unknown>).map(
+        ([k, v]) => `    ${k}: ${JSON.stringify(v)}`
+      );
+      return `${key}:\n${nestedLines.join('\n')}`;
     }
     return `${key}: ${JSON.stringify(value)}`;
   });

@@ -172,4 +172,14 @@ export interface ParsedMarkdown {
  */
 export interface ProcessedFrontMatter {
   [key: string]: unknown;
+  translationMeta?: TranslationMeta;
+}
+
+/**
+ * 翻译元数据
+ */
+export interface TranslationMeta {
+  translatedAt: string;
+  model: string;
+  sourceHash: string;
 }
