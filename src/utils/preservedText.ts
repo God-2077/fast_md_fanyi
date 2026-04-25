@@ -77,6 +77,17 @@ export function preservedHandle(
     return { text, dictionary };
   }
 
+  // 先识别并保护文本中已有的占位符
+  const existingPlaceholderRegex = new RegExp(escapeRegExp(PLACEHOLDER_PREFIX) + '.+?' + escapeRegExp(PLACEHOLDER_SUFFIX), 'g');
+  let match: RegExpExecArray | null;
+  while ((match = existingPlaceholderRegex.exec(text)) !== null) {
+    const original = match[0];
+    if (!dictionary.has(original)) {
+      dictionary.set(original, original);
+      usedPlaceholders.add(original);
+    }
+  }
+
   // 按位置从后往前收集所有匹配项
   interface Match {
     index: number;
@@ -95,7 +106,28 @@ export function preservedHandle(
     while ((match = regex.exec(text)) !== null) {
       const original = match[0];
       
-      // 避免重复匹配
+      // 跳过已经是占位符的完整匹配
+      if (original.startsWith(PLACEHOLDER_PREFIX) && original.endsWith(PLACEHOLDER_SUFFIX)) {
+        continue;
+      }
+      
+      // 跳过被包含在已保护占位符中的匹配
+      const isProtectedContent = Array.from(dictionary.entries()).some(
+        ([orig, placeholder]) => placeholder === original && orig === placeholder
+      );
+      if (isProtectedContent) {
+        continue;
+      }
+      
+      // 跳过与已保护占位符位置重叠的匹配
+      const overlapsWithProtected = Array.from(dictionary.entries()).some(([orig]) => {
+        const idx = text.indexOf(orig);
+        return idx >= 0 && match!.index >= idx && match!.index < idx + orig.length;
+      });
+      if (overlapsWithProtected) {
+        continue;
+      }
+      
       if (matches.some(m => m.index === match!.index && m.original === original)) {
         continue;
       }
