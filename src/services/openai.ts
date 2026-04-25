@@ -10,6 +10,32 @@ import { logLevelConfig } from '../config';
 
 const logger = new Logger(logLevelConfig, 'openai');
 
+function checkForRepetition(
+  text: string, 
+  patternLength: number = 18, 
+  repeatLimit: number = 5
+): { success: false; error: string } | null {
+  if (text.length < patternLength) {
+    return null;
+  }
+
+  const lastPattern = text.slice(-patternLength);
+  
+  const escapedPattern = lastPattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(escapedPattern, 'g');
+  const matches = text.match(regex);
+  const repeatCount = matches ? matches.length : 0;
+
+  if (repeatCount >= repeatLimit) {
+    return {
+      success: false,
+      error: `检测到AI文本重复。最后${patternLength}个字符"${lastPattern}"在响应中重复出现了${repeatCount}次，已超过预设阈值（${repeatLimit}次）。请求已被中断。`
+    };
+  }
+
+  return null;
+}
+
 /**
  * 发送请求到 OpenAI API
  */
@@ -155,6 +181,22 @@ async function handleStreamRequest(
             const content = parsed.choices?.[0]?.delta?.content || '';
             if (content) {
               fullContent += content;
+
+              const repetitionCheck = checkForRepetition(fullContent);
+              if (repetitionCheck) {
+                controller.abort();
+                clearTimeout(timeoutId);
+                if (!resolved) {
+                  resolved = true;
+                  resolve({
+                    status: 400,
+                    success: false,
+                    content: fullContent,
+                    error: repetitionCheck.error,
+                  });
+                }
+                return;
+              }
             }
           } catch {
             // 忽略解析错误，继续处理
@@ -209,6 +251,17 @@ function handleJsonResponse(response: AxiosResponse): ResponseData {
 
   if (status === 200 && data.choices && data.choices.length > 0) {
     const content = data.choices[0]?.message?.content || '';
+
+    const repetitionCheck = checkForRepetition(content);
+    if (repetitionCheck) {
+      logger.warn(`OpenAI API 响应内容检测到重复模式: ${repetitionCheck.error}`);
+      return {
+        status: 400,
+        success: false,
+        content: content,
+        error: repetitionCheck.error,
+      };
+    }
 
     logger.info(`OpenAI API 请求成功，响应状态: ${status}`);
     return {
