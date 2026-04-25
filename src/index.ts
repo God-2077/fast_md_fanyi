@@ -84,6 +84,12 @@ async function main(): Promise<void> {
     }
 
     targetLogger.info(`目标语言 ${target.fullName} (${targetLang}) 处理完成`);
+
+    // 复制其他文件（非 Markdown）
+    if (fileConfig.copyOtherFiles) {
+      const outputFolder = path.join(outputBaseFolder, targetLang);
+      await copyOtherFiles(inputFolder, outputFolder, targetLogger);
+    }
   }
 
   logger.info('=== 所有文件翻译完成 ===');
@@ -212,6 +218,48 @@ function buildOutputContent(
   });
 
   return `---\n${frontMatterLines.join('\n')}\n---\n\n${body}`;
+}
+
+async function copyOtherFiles(
+  inputFolder: string,
+  outputFolder: string,
+  logger: Logger
+): Promise<void> {
+  logger.info('正在复制其他文件...');
+  
+  const excludedDirs = fileConfig.ignore || ['node_modules', '.git', 'output', '.DS_Store'];
+  
+  async function scanDir(dir: string): Promise<string[]> {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    const files: string[] = [];
+    
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      
+      if (entry.isDirectory()) {
+        if (excludedDirs.includes(entry.name)) continue;
+        const subFiles = await scanDir(fullPath);
+        files.push(...subFiles);
+      } else if (entry.isFile() && !entry.name.endsWith('.md')) {
+        files.push(fullPath);
+      }
+    }
+    
+    return files;
+  }
+  
+  const otherFiles = await scanDir(inputFolder);
+  
+  for (const filePath of otherFiles) {
+    const relativePath = path.relative(inputFolder, filePath);
+    const destPath = path.join(outputFolder, relativePath);
+    
+    await fs.mkdir(path.dirname(destPath), { recursive: true });
+    await fs.copyFile(filePath, destPath);
+    logger.info(`已复制: ${relativePath}`);
+  }
+  
+  logger.info(`复制完成，共 ${otherFiles.length} 个文件`);
 }
 
 // 启动程序
