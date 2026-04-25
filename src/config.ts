@@ -7,8 +7,14 @@ import type {
   TranslationConfig, 
   OpenAIConfig, 
   FileConfig,
-  AppConfig
+  AppConfig,
+  LogLevel
 } from './types';
+
+/**
+ * 日志级别配置
+ */
+export const logLevelConfig: LogLevel = (process.env.LOG_LEVEL as LogLevel) || 'debug';
 
 /**
  * 翻译配置
@@ -82,7 +88,7 @@ export const openaiConfig: OpenAIConfig = {
   // 请求超时时间（毫秒）
   timeout: 1000 * 60 * 5, // 5 分钟
   // 并发请求数
-  threadCount: 4,
+  threadCount: 1,
   // 重试次数
   retryCount: 3,
 };
@@ -116,6 +122,7 @@ export const appConfig: AppConfig = {
   translation: translationConfig,
   openai: openaiConfig,
   file: fileConfig,
+  logLevel: logLevelConfig,
 };
 
 /**
@@ -161,6 +168,7 @@ export function validateConfig(): { valid: boolean; errors: string[] } {
  */
 export function getConfigSummary(): Record<string, unknown> {
   return {
+    logLevel: logLevelConfig,
     sourceLanguage: translationConfig.source,
     targetLanguages: translationConfig.targets.map(t => t.fullName),
     model: openaiConfig.model,

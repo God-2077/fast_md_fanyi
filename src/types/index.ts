@@ -139,6 +139,13 @@ export interface TranslateResult {
   error?: string;
 }
 
+// ============== 日志相关类型 ==============
+
+/**
+ * 日志级别
+ */
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+
 // ============== 应用级别类型 ==============
 
 /**
@@ -148,6 +155,7 @@ export interface AppConfig {
   translation: TranslationConfig;
   openai: OpenAIConfig;
   file: FileConfig;
+  logLevel: LogLevel;
 }
 
 /**
