@@ -86,7 +86,7 @@ async function fetchOpenAIData(config: FetchOpenAIConfig): Promise<ResponseData>
 
   logger.debug(`OpenAI API 请求体: ${JSON.stringify(requestBody)}`);
 
-  logger.info(`发送 OpenAI API 请求到 ${baseURL}/chat/completions`);
+  logger.debug(`发送 OpenAI API 请求到 ${baseURL}/chat/completions`);
 
   // 流式响应处理
   if (stream) {
