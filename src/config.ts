@@ -98,7 +98,6 @@ export const openaiConfig: OpenAIConfig = {
  */
 export const fileConfig: FileConfig = {
   inputFolder: 'input',
-  // 忽略的文件或文件夹
   ignore: [
     'node_modules',
     'dist',
@@ -109,10 +108,9 @@ export const fileConfig: FileConfig = {
   outputFolder: 'output',
   fileName: '{name}_{targetShortName}.{ext}',
   filePath: '{targetShortName}/{filePath}.{ext}',
-  // 保留原始文件夹结构
   preserveFolders: true,
-  // 复制其它文件到输出文件夹
   copyOtherFiles: true,
+  skipUnchanged: true,
 };
 
 /**
