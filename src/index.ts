@@ -17,6 +17,58 @@ import type { ProcessedFrontMatter, TranslationMeta } from './types';
 // 创建日志记录器
 const logger = new Logger(logLevelConfig, 'main');
 
+async function cleanupOutputFolder(
+  outputFolder: string,
+  outputFilesRecord: Set<string>,
+  logger: Logger
+): Promise<void> {
+  logger.info('正在清理未记录的文件...');
+  
+  const excludedDirs = fileConfig.ignore || ['node_modules', '.git', 'output', '.DS_Store'];
+  let deletedCount = 0;
+  
+  async function scanDir(dir: string): Promise<string[]> {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    const files: string[] = [];
+    
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      
+      if (entry.isDirectory()) {
+        if (excludedDirs.includes(entry.name)) continue;
+        const subFiles = await scanDir(fullPath);
+        files.push(...subFiles);
+        if (subFiles.length === 0) {
+          try {
+            await fs.rmdir(fullPath);
+            logger.info(`已删除空目录: ${path.relative(outputFolder, fullPath)}`);
+          } catch {}
+        }
+      } else if (entry.isFile()) {
+        files.push(fullPath);
+      }
+    }
+    
+    return files;
+  }
+  
+  const existingFiles = await scanDir(outputFolder);
+  
+  for (const filePath of existingFiles) {
+    if (!outputFilesRecord.has(filePath)) {
+      try {
+        await fs.unlink(filePath);
+        logger.info(`已删除: ${path.relative(outputFolder, filePath)}`);
+        deletedCount++;
+      } catch (error) {
+        logger.warn(`删除文件失败: ${filePath}`, error);
+      }
+    }
+  }
+  
+  logger.info(`清理完成，删除了 ${deletedCount} 个文件`);
+}
+
 /**
  * 主函数
  */
@@ -56,6 +108,9 @@ async function main(): Promise<void> {
   const { source, targets } = translationConfig;
   const sourceLang = source.shortName;
 
+  // 记录所有输出文件路径
+  const outputFilesRecord = new Set<string>();
+
   // 按目标语言处理
   for (const target of targets) {
     const targetLang = target.shortName;
@@ -68,7 +123,7 @@ async function main(): Promise<void> {
       targetLogger.info(`翻译文件 [${index + 1}/${markdownFiles.length}]: ${path.basename(markdownFile)}`);
 
       try {
-        await processMarkdownFile(
+        const outputPath = await processMarkdownFile(
           markdownFile,
           inputFolder,
           outputBaseFolder,
@@ -77,6 +132,7 @@ async function main(): Promise<void> {
           translationService,
           targetLogger
         );
+        outputFilesRecord.add(outputPath);
       } catch (error) {
         targetLogger.error(`处理文件时发生错误: ${markdownFile}`, error);
         // 跳过当前文件，继续处理下一个
@@ -89,8 +145,14 @@ async function main(): Promise<void> {
     // 复制其他文件（非 Markdown）
     if (fileConfig.copyOtherFiles) {
       const outputFolder = path.join(outputBaseFolder, targetLang);
-      await copyOtherFiles(inputFolder, outputFolder, targetLogger);
+      const copiedFiles = await copyOtherFiles(inputFolder, outputFolder, targetLogger);
+      for (const f of copiedFiles) {
+        outputFilesRecord.add(f);
+      }
     }
+
+    // 清理输出目录中未记录的文件
+    await cleanupOutputFolder(path.join(outputBaseFolder, targetLang), outputFilesRecord, targetLogger);
   }
 
   logger.info('=== 所有文件翻译完成 ===');
@@ -107,14 +169,14 @@ async function processMarkdownFile(
   targetLang: string,
   translationService: TranslationService,
   fileLogger: Logger
-): Promise<void> {
+): Promise<string> {
   // 1. 读取文件并转换换行符 (CR → LF, CR+LF → LF)
   let markdownContent = await fs.readFile(filePath, 'utf-8');
   markdownContent = markdownContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   
   if (!markdownContent.trim()) {
     fileLogger.warn('文件内容为空，跳过');
-    return;
+    return '';
   }
 
   // 2. 计算原文哈希值
@@ -133,7 +195,7 @@ async function processMarkdownFile(
       
       if (existingMeta?.sourceHash === contentHash) {
         fileLogger.info(`原文未变更，跳过翻译: ${path.basename(outputPath)}`);
-        return;
+        return outputPath;
       }
     } catch {
       // 文件不存在，继续翻译
@@ -179,6 +241,8 @@ async function processMarkdownFile(
   await fs.writeFile(outputPath, finalContent, 'utf-8');
 
   fileLogger.info(`已生成: ${path.basename(outputPath)}`);
+
+  return outputPath;
 }
 
 /**
@@ -258,10 +322,11 @@ async function copyOtherFiles(
   inputFolder: string,
   outputFolder: string,
   logger: Logger
-): Promise<void> {
+): Promise<string[]> {
   logger.info('正在复制其他文件...');
   
   const excludedDirs = fileConfig.ignore || ['node_modules', '.git', 'output', '.DS_Store'];
+  const copiedFiles: string[] = [];
   
   async function scanDir(dir: string): Promise<string[]> {
     const entries = await fs.readdir(dir, { withFileTypes: true });
@@ -290,10 +355,12 @@ async function copyOtherFiles(
     
     await fs.mkdir(path.dirname(destPath), { recursive: true });
     await fs.copyFile(filePath, destPath);
+    copiedFiles.push(destPath);
     logger.info(`已复制: ${relativePath}`);
   }
   
   logger.info(`复制完成，共 ${otherFiles.length} 个文件`);
+  return copiedFiles;
 }
 
 // 启动程序

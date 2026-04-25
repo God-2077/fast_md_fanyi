@@ -8,8 +8,7 @@ import type {
   OpenAIConfig, 
   FetchOpenAIConfig, 
   TranslateOptions,
-  TranslateResult,
-  LogLevel
+  TranslateResult
 } from '../types';
 import { Logger } from '../utils/logger';
 import { preservedHandle, restoreText } from '../utils/preservedText';

@@ -31,16 +31,6 @@ function createPlaceholder(id: string): string {
 }
 
 /**
- * 从占位符提取ID
- */
-function extractPlaceholderId(placeholder: string): string | null {
-  if (!placeholder.startsWith(PLACEHOLDER_PREFIX) || !placeholder.endsWith(PLACEHOLDER_SUFFIX)) {
-    return null;
-  }
-  return placeholder.slice(PLACEHOLDER_PREFIX.length, -PLACEHOLDER_SUFFIX.length);
-}
-
-/**
  * 转义正则表达式特殊字符
  */
 function escapeRegExp(str: string): string {
