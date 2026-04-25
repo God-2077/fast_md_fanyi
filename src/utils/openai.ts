@@ -1,16 +1,7 @@
 import axios from 'axios';
-import type { OpenAIConfig } from './type/openai';
+import type { FetchOpenAIConfig, ResponseData } from '../type/openai';
 
-interface ResponseData {
-    status: number;
-    success: boolean;
-    // ai 回答内容
-    content: string;
-    // 错误信息
-    error: string;
-}
-
-async function fetchOpenAIData(openaiConfig: OpenAIConfig): Promise<ResponseData> {
+async function fetchOpenAIData(openaiConfig: FetchOpenAIConfig): Promise<ResponseData> {
     const {
         apiKey,
         baseURL,
@@ -167,8 +158,20 @@ function handleError(error: any): ResponseData {
     };
 }
 
+function genTranslateMessages(prompt: string, content: string): any[] {
+    const messages: any[] = [];
+    messages.push({ role: "system", content: prompt });
+    messages.push({ role: "user", content: [
+        {
+            type: "text",
+            text: `\n\n--- File: translate.md ---\n${content}`,
+        }
+    ] });
+    return messages;
+}
+
 // 可选：导出工具函数以便其他地方使用
-export { fetchOpenAIData };
+export { fetchOpenAIData, genTranslateMessages };
 
 
 

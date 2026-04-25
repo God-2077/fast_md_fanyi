@@ -31,6 +31,8 @@ export interface OpenAIConfig {
     timeout: number;
     // 线程数
     threadCount: number;
+    // 重试次数
+    retryCount: number;
 }
 
 export interface FileConfig {

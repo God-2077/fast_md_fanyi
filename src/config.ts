@@ -58,11 +58,13 @@ export const openaiConfig: OpenAIConfig = {
     maxTokens: 8000,
     stream: true,
     // 系统提示词模板
-    promptTemplate: "你是一个专业的翻译助手，负责将文本文件从{source}翻译为{target}。",
+    promptTemplate: "你是一个专业的翻译助手，负责将文本文件从{sourceLanguage}翻译为{targetLanguage}。",
     // 超时时间, 单位毫秒
     timeout: 1000 * 60 * 5,
     // 线程数
     threadCount: 4,
+    // 重试次数
+    retryCount: 3,
 }
 
 

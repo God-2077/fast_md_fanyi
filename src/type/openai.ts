@@ -1,5 +1,5 @@
 
-export interface OpenAIConfig {
+export interface FetchOpenAIConfig {
     apiKey: string;
     baseURL: string;
     model: string;
@@ -12,4 +12,13 @@ export interface OpenAIConfig {
     // 超时时间, 单位毫秒
     timeout: number;
     messages: any[];
+}
+
+export interface ResponseData {
+    status: number;
+    success: boolean;
+    // ai 回答内容
+    content: string;
+    // 错误信息
+    error: string;
 }
