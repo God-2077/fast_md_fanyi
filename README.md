@@ -2,6 +2,8 @@
 
 Markdown 文件批量翻译工具，支持多语言翻译。
 
+---
+
 ## 功能特性
 
 - 批量翻译 Markdown 文件
@@ -10,6 +12,8 @@ Markdown 文件批量翻译工具，支持多语言翻译。
 - 支持多目标语言并行处理
 - 完整的类型安全
 - 完善的错误处理和日志记录
+- 自动检测重复翻译内容
+- 支持自定义提示词模板
 
 ## 项目结构
 
@@ -65,18 +69,41 @@ pnpm start
 
 5. 翻译结果将输出到 `output/{语言代码}/` 文件夹
 
+### 保留术语
+
+在 `translationConfig.preserveTerms` 中配置需要保留不翻译的术语：
+
+```typescript
+preserveTerms: ['API', 'SDK', 'token', 'npm', 'pnpm', 'Node.js']
+```
+
+---
+
 ## 保留内容
 
 工具会自动保留以下内容不被翻译：
 
-- 代码块
-- 行内代码
-- 数学公式
-- 配置的保留术语（如 token、API、SDK）
+- 代码块（ fenced code blocks 和行内代码）
+- 数学公式（LaTeX 格式）
+- 配置的保留术语（如 API、SDK、npm 等）
+
+## 环境变量
+
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `OPENAI_API_KEY` | API 密钥 | - |
+| `OPENAI_BASE_URL` | API 基础地址 | https://api.openai.com/v1 |
+| `OPENAI_MODEL` | 模型名称 | gpt-4o-mini |
+| `LOG_LEVEL` | 日志级别 | info |
+
+---
 
 ## 开发
 
 ```bash
+# 安装依赖
+pnpm install
+
 # 类型检查
 pnpm typecheck
 
@@ -85,4 +112,7 @@ pnpm dev
 
 # 构建
 pnpm build
+
+# 启动
+pnpm start
 ```
