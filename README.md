@@ -1,4 +1,4 @@
-# 翻译工具 (Fanyi)
+# 翻译工具 (Fast MD Fanyi)
 
 Markdown 文件批量翻译工具，支持多语言翻译。
 
@@ -60,7 +60,7 @@ pnpm install
 
 2. 配置 API 密钥（在 `src/config.ts` 中或设置环境变量）
 
-3. 放入待翻译文件到 `i/` 文件夹
+3. 放入待翻译文件到 `input/` 文件夹
 
 4. 运行程序：
 ```bash
@@ -93,7 +93,7 @@ preserveTerms: ['API', 'SDK', 'token', 'npm', 'pnpm', 'Node.js']
 |------|------|--------|
 | `OPENAI_API_KEY` | API 密钥 | - |
 | `OPENAI_BASE_URL` | API 基础地址 | https://api.openai.com/v1 |
-| `OPENAI_MODEL` | 模型名称 | gpt-4o-mini |
+| `OPENAI_MODEL` | 模型名称 | Qwen3-8B |
 | `LOG_LEVEL` | 日志级别 | info |
 
 ---
