@@ -7,6 +7,7 @@ import { glob } from 'glob';
 import path from 'path';
 import fs from 'fs/promises';
 import fm from 'front-matter';
+import yaml from 'js-yaml';
 import crypto from 'crypto';
 
 import { Logger } from './utils/logger';
@@ -352,20 +353,13 @@ function buildOutputContent(
     return body;
   }
 
-  const frontMatterLines = keys.map(key => {
-    const value = frontMatter[key];
-    if (Array.isArray(value)) {
-      return `${key}: [${value.map(item => JSON.stringify(item)).join(', ')}]`;
-    } else if (typeof value === 'object' && value !== null) {
-      const nestedLines = Object.entries(value as Record<string, unknown>).map(
-        ([k, v]) => `    ${k}: ${JSON.stringify(v)}`
-      );
-      return `${key}:\n${nestedLines.join('\n')}`;
-    }
-    return `${key}: ${JSON.stringify(value)}`;
+  const yamlStr = yaml.dump(frontMatter, {
+    indent: 2,
+    sortKeys: false,
+    noRefs: true,
   });
 
-  return `---\n${frontMatterLines.join('\n')}\n---\n\n${body}`;
+  return `---\n${yamlStr}---\n\n${body}`;
 }
 
 async function copyOtherFiles(
