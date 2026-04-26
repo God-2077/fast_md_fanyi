@@ -93,6 +93,12 @@ export const openaiConfig: OpenAIConfig = {
   retryCount: 3,
   // 是否检测乱码
   checkMangledCode: true,
+  // 智能 maxTokens（根据内容长度动态调整）
+  // 如需自定义计算逻辑，可修改 calculateSmartTokens 函数
+  smartTokens: true,
+  // 智能 timeout（根据内容长度动态调整）
+  // 如需自定义计算逻辑，可修改 calculateSmartTokens 函数
+  smartTimeout: true,
 };
 
 /**
@@ -178,6 +184,38 @@ export function getConfigSummary(): Record<string, unknown> {
     inputFolder: fileConfig.inputFolder,
     outputFolder: fileConfig.outputFolder,
   };
+}
+
+/**
+ * 根据系统提示词和内容智能计算 maxTokens 和 timeout
+ * @param systemPrompt 系统提示词
+ * @param content 待翻译内容
+ * @returns 智能计算的 maxTokens 和 timeout
+ */
+export function calculateSmartTokens(
+  _systemPrompt: string,
+  content: string
+): { maxTokens: number; timeout: number } {
+  const contentTokens = Math.ceil(content.length / 4);
+  let maxTokens = Math.max(1000, Math.ceil(contentTokens * 1.2));
+  const baseTokens = openaiConfig.maxTokens;
+  if (maxTokens < baseTokens) {
+    maxTokens = baseTokens;
+  } else if (maxTokens > baseTokens * 3) {
+    maxTokens = baseTokens * 3;
+  }
+
+  let timeout = 1000 * 60;
+  if (contentTokens > 500) {
+    timeout = Math.ceil((contentTokens / 500) * 1000 * 60);
+  }
+  if (timeout < openaiConfig.timeout) {
+    timeout = openaiConfig.timeout;
+  } else if (timeout > openaiConfig.timeout * 3) {
+    timeout = openaiConfig.timeout * 3;
+  }
+
+  return { maxTokens, timeout };
 }
 
 export default appConfig;

@@ -48,6 +48,8 @@ export interface OpenAIConfig {
   threadCount: number;
   retryCount: number;
   checkMangledCode: boolean;
+  smartTokens: boolean;
+  smartTimeout: boolean;
 }
 
 /**
