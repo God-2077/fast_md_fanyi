@@ -11,7 +11,8 @@ import yaml from 'js-yaml';
 import crypto from 'crypto';
 
 import { Logger } from './utils/logger';
-import { translationConfig, openaiConfig, fileConfig, validateConfig, getConfigSummary, logLevelConfig } from './config';
+import { translationConfig, openaiConfig, fileConfig, logLevelConfig } from './config';
+import { validateConfig, getConfigSummary } from './utils';
 import { TranslationService } from './services/translation';
 import type { ProcessedFrontMatter, TranslationMeta } from './types';
 

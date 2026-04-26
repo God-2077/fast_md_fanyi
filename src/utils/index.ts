@@ -16,3 +16,4 @@ export {
   createTranslateMessages,
   DEFAULT_PROMPT_TEMPLATE 
 } from './prompt';
+export { validateConfig, getConfigSummary } from './config';
