@@ -44,7 +44,9 @@ async function cleanupOutputFolder(
           try {
             await fs.rmdir(fullPath);
             logger.info(`已删除空目录: ${path.relative(outputFolder, fullPath)}`);
-          } catch {}
+          } catch (error) {
+            logger.warn(`删除目录失败: ${fullPath}`, error);
+          }
         }
       } else if (entry.isFile()) {
         files.push(fullPath);
