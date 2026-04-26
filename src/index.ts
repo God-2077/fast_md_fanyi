@@ -106,7 +106,7 @@ async function main(): Promise<void> {
   const translationService = new TranslationService(openaiConfig, translationConfig, logger);
 
   const { source, targets } = translationConfig;
-  const sourceLang = source.shortName;
+  const sourceLang = source.fullName;
 
   // 记录所有输出文件路径
   const outputFilesRecord = new Set<string>();
@@ -121,6 +121,7 @@ async function main(): Promise<void> {
   // 按目标语言处理
   for (const target of targets) {
     const targetLang = target.shortName;
+    const targetLangFullName = target.fullName;
     const targetLogger = logger.child(targetLang);
     
     targetLogger.info(`开始处理目标语言: ${target.fullName} (${targetLang})`);
@@ -137,6 +138,7 @@ async function main(): Promise<void> {
           outputBaseFolder,
           sourceLang,
           targetLang,
+          targetLangFullName,
           translationService,
           targetLogger
         );
@@ -199,6 +201,7 @@ async function processMarkdownFile(
   outputBaseFolder: string,
   sourceLang: string,
   targetLang: string,
+  targetLanguage: string,
   translationService: TranslationService,
   fileLogger: Logger
 ): Promise<{ outputPath: string; skipped: boolean; usage?: { totalTokens: number } }> {
@@ -243,7 +246,7 @@ async function processMarkdownFile(
   const { frontMatter: processedFrontMatter, usage: frontMatterUsage } = await translateFrontMatter(
     rawFrontMatter,
     sourceLang,
-    targetLang,
+    targetLanguage,
     translationService,
     fileLogger
   );
@@ -255,7 +258,7 @@ async function processMarkdownFile(
     const bodyResult = await translationService.translateMarkdown(
       rawMarkdownBody,
       sourceLang,
-      targetLang
+      targetLanguage
     );
     translatedBody = bodyResult.translatedText;
     bodyUsage = bodyResult.usage;
@@ -291,7 +294,7 @@ async function processMarkdownFile(
 async function translateFrontMatter(
   frontMatter: Record<string, unknown>,
   sourceLang: string,
-  targetLang: string,
+  targetLanguage: string,
   translationService: TranslationService,
   fileLogger: Logger
 ): Promise<{ frontMatter: ProcessedFrontMatter; usage?: { totalTokens: number } }> {
@@ -311,7 +314,7 @@ async function translateFrontMatter(
         const result = await translationService.translateText(
           originalValue,
           sourceLang,
-          targetLang
+          targetLanguage
         );
         processed[field] = result.translatedText;
         if (result.usage) totalUsage += result.usage.totalTokens;
@@ -319,7 +322,7 @@ async function translateFrontMatter(
         const result = await translationService.translateBatch(
           originalValue.filter((item): item is string => typeof item === 'string'),
           sourceLang,
-          targetLang
+          targetLanguage
         );
         processed[field] = result.translations;
         if (result.usage) totalUsage += result.usage.totalTokens;
