@@ -91,6 +91,8 @@ export const openaiConfig: OpenAIConfig = {
   threadCount: 3,
   // 重试次数
   retryCount: 3,
+  // 是否检测乱码
+  checkMangledCode: true,
 };
 
 /**

@@ -10,6 +10,10 @@ import { logLevelConfig } from '../config';
 
 const logger = new Logger(logLevelConfig, 'openai');
 
+function hasMangledCode(str: string): boolean {
+  return /\uFFFD/.test(str);
+}
+
 function checkForRepetition(
   text: string, 
   patternLength: number = 18, 
@@ -49,6 +53,7 @@ async function fetchOpenAIData(config: FetchOpenAIConfig): Promise<ResponseData>
     stream,
     timeout,
     messages,
+    checkMangledCode,
   } = config;
 
   // 验证必需参数
@@ -91,11 +96,11 @@ async function fetchOpenAIData(config: FetchOpenAIConfig): Promise<ResponseData>
   // 流式响应处理
   if (stream) {
     requestBody.stream = true;
-    return handleStreamRequest(baseURL, headers, requestBody, timeout);
+    return handleStreamRequest(baseURL, headers, requestBody, timeout, checkMangledCode);
   }
 
   // 普通请求
-  return handleNormalRequest(baseURL, headers, requestBody, timeout);
+  return handleNormalRequest(baseURL, headers, requestBody, timeout, checkMangledCode);
 }
 
 /**
@@ -105,7 +110,8 @@ async function handleNormalRequest(
   baseURL: string,
   headers: Record<string, string>,
   requestBody: Record<string, unknown>,
-  timeout?: number
+  timeout?: number,
+  checkMangledCode?: boolean
 ): Promise<ResponseData> {
   try {
     const response: AxiosResponse = await axios.post(
@@ -117,7 +123,7 @@ async function handleNormalRequest(
       }
     );
 
-    return handleJsonResponse(response);
+    return handleJsonResponse(response, checkMangledCode);
   } catch (error) {
     return handleRequestError(error);
   }
@@ -130,7 +136,8 @@ async function handleStreamRequest(
   baseURL: string,
   headers: Record<string, string>,
   requestBody: Record<string, unknown>,
-  timeout?: number
+  timeout?: number,
+  checkMangledCode?: boolean
 ): Promise<ResponseData> {
   return new Promise((resolve) => {
     let fullContent = '';
@@ -197,6 +204,21 @@ async function handleStreamRequest(
                 }
                 return;
               }
+
+              if (checkMangledCode && hasMangledCode(fullContent)) {
+                controller.abort();
+                clearTimeout(timeoutId);
+                if (!resolved) {
+                  resolved = true;
+                  resolve({
+                    status: 400,
+                    success: false,
+                    content: fullContent,
+                    error: '检测到响应内容含乱码（\\uFFFD），请求已被中断',
+                  });
+                }
+                return;
+              }
             }
           } catch {
             // 忽略解析错误，继续处理
@@ -243,7 +265,7 @@ async function handleStreamRequest(
 /**
  * 处理 JSON 响应
  */
-function handleJsonResponse(response: AxiosResponse): ResponseData {
+function handleJsonResponse(response: AxiosResponse, checkMangledCode?: boolean): ResponseData {
   const { status, data } = response;
 
   logger.debug(`OpenAI API 响应状态: ${status}`);
@@ -260,6 +282,16 @@ function handleJsonResponse(response: AxiosResponse): ResponseData {
         success: false,
         content: content,
         error: repetitionCheck.error,
+      };
+    }
+
+    if (checkMangledCode && hasMangledCode(content)) {
+      logger.warn('OpenAI API 响应内容检测到乱码');
+      return {
+        status: 400,
+        success: false,
+        content: content,
+        error: '检测到响应内容含乱码（\\uFFFD）',
       };
     }
 

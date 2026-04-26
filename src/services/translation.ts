@@ -164,6 +164,7 @@ export class TranslationService {
           stream: false,
           timeout: this.config.timeout,
           messages,
+          checkMangledCode: this.config.checkMangledCode,
         };
 
         const response = await fetchOpenAIData(apiConfig);

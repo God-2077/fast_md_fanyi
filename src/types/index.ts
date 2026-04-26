@@ -47,6 +47,7 @@ export interface OpenAIConfig {
   timeout: number;
   threadCount: number;
   retryCount: number;
+  checkMangledCode: boolean;
 }
 
 /**
@@ -98,6 +99,7 @@ export interface FetchOpenAIConfig {
   stream: boolean;
   timeout: number;
   messages: Message[];
+  checkMangledCode?: boolean;
 }
 
 /**
