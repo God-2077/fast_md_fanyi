@@ -75,7 +75,7 @@
 
 ## 14. 跳过特定文件的翻译配置
 
-- [ ] 完成
+- [x] 完成
 
 在 translationConfig 中添加配置：
 - 正则匹配 front-matter 某字段，有匹配则跳过

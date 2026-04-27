@@ -64,6 +64,18 @@ export const translationConfig: TranslationConfig = {
     /\bAPI\b/gi,
     /\bSDK\b/gi,
   ],
+  // 跳过翻译匹配配置
+  skipMatches: [
+    // {
+    //   // 匹配 front-matter 指定字段，有匹配则跳过
+    //   field: 'draft',
+    //   fieldPattern: /^true$/i,
+    // },
+    // {
+    //   // 匹配 content 内容，有匹配则跳过
+    //   contentPattern: /<!--\s*skip\s*-->/gi,
+    // },
+  ],
 };
 
 /**
