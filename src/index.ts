@@ -12,7 +12,7 @@ import crypto from 'crypto';
 import { Logger } from './utils/logger';
 import { translationConfig, openaiConfig, fileConfig, logLevelConfig } from './config';
 import { validateConfig, getConfigSummary, cleanupOutputFolder, buildOutputContent, copyOtherFiles } from './utils';
-import { TranslationService } from './services/translation';
+import { TranslationService, TranslationServiceError } from './services/translation';
 import type { ProcessedFrontMatter, TranslationMeta } from './types';
 
 const logger = new Logger(logLevelConfig, 'main');
@@ -58,6 +58,9 @@ async function main(): Promise<void> {
   let totalFilesSkipped = 0;
   let totalCopiedFiles = 0;
   let totalTokensUsed = 0;
+  let consecutiveErrors = 0;
+  const maxConsecutiveErrors = openaiConfig.maxConsecutiveErrors;
+  const maxRetriesBehavior = openaiConfig.maxRetriesBehavior;
   const startTime = Date.now();
 
   for (const target of targets) {
@@ -86,9 +89,11 @@ async function main(): Promise<void> {
 
         if (result.skipped) {
           totalFilesSkipped++;
+          consecutiveErrors = 0;
         } else {
           outputFilesRecord.add(result.outputPath);
           totalFilesTranslated++;
+          consecutiveErrors = 0;
           if (result.usage) {
             totalTokensUsed += result.usage.totalTokens;
           }
@@ -103,7 +108,28 @@ async function main(): Promise<void> {
           targetLogger.info(`跳过 (原文未变更), 耗时: ${(fileElapsed / 1000).toFixed(2)}s`);
         }
       } catch (error) {
-        targetLogger.error(`处理文件时发生错误: ${markdownFile}`, error);
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        const isFatal = error instanceof TranslationServiceError && error.fatal;
+
+        if (isFatal) {
+          targetLogger.error(`致命错误，程序终止: ${errorMsg}`);
+          process.exit(1);
+        }
+
+        consecutiveErrors++;
+        targetLogger.error(`处理文件时发生错误: ${markdownFile}, 错误: ${errorMsg}, 连续错误: ${consecutiveErrors}/${maxConsecutiveErrors}`);
+
+        if (consecutiveErrors >= maxConsecutiveErrors) {
+          logger.error(`连续错误达到上限 ${maxConsecutiveErrors}，程序退出`);
+          process.exit(1);
+        }
+
+        if (maxRetriesBehavior === 'exit') {
+          logger.error(`达到最大重试次数，配置为退出程序`);
+          process.exit(1);
+        }
+
+        targetLogger.info(`跳过该文件，继续下一个`);
         continue;
       }
     }

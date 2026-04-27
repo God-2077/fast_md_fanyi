@@ -17,6 +17,16 @@ import { fetchOpenAIData } from '../services/openai';
 import { logLevelConfig } from '../config';
 
 /**
+ * 翻译服务错误
+ */
+export class TranslationServiceError extends Error {
+  constructor(message: string, public readonly fatal: boolean = false) {
+    super(message);
+    this.name = 'TranslationServiceError';
+  }
+}
+
+/**
  * 翻译服务类
  */
 export class TranslationService {
@@ -32,6 +42,10 @@ export class TranslationService {
     this.config = openaiConfig;
     this.translationConfig = translationConfig;
     this.logger = logger || new Logger(logLevelConfig, 'TranslationService');
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   /**
@@ -185,7 +199,23 @@ export class TranslationService {
         }
 
         lastError = response.error;
-        this.logger.warn(`翻译尝试 ${attempt + 1} 失败: ${lastError}`);
+        const isFatalError = response.errorClassification === 'fatal';
+        this.logger.warn(`翻译尝试 ${attempt + 1} 失败: ${lastError} [${response.errorClassification}]`);
+
+        if (isFatalError) {
+          this.logger.error(`收到致命错误，终止翻译: ${lastError}`);
+          throw new TranslationServiceError(lastError, true);
+        }
+
+        const isRateLimited = response.status === 429;
+        const waitTime = isRateLimited ? this.config.rateLimitWait : 1000;
+        
+        if (attempt < maxRetries - 1) {
+          if (isRateLimited) {
+            this.logger.info(`速率限制 (429)，等待 ${waitTime / 1000} 秒后重试...`);
+          }
+          await this.delay(waitTime);
+        }
 
       } catch (error) {
         lastError = error instanceof Error ? error.message : String(error);

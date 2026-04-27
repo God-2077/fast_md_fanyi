@@ -99,6 +99,12 @@ export const openaiConfig: OpenAIConfig = {
   // 智能 timeout（根据内容长度动态调整）
   // 如需自定义计算逻辑，可修改 calculateSmartTokens 函数
   smartTimeout: true,
+  // 达到最大重试次数时的行为
+  maxRetriesBehavior: 'skip', // 'skip' 跳过该文件继续下一个, 'exit' 退出程序
+  // 连续错误次数限制
+  maxConsecutiveErrors: 5, // 连续失败5个文件后退出
+  // 429 速率限制等待时间（毫秒）
+  rateLimitWait: 10000, // 默认10秒
 };
 
 /**

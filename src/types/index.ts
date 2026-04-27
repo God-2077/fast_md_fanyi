@@ -50,6 +50,9 @@ export interface OpenAIConfig {
   checkMangledCode: boolean;
   smartTokens: boolean;
   smartTimeout: boolean;
+  maxRetriesBehavior: 'skip' | 'exit';
+  maxConsecutiveErrors: number;
+  rateLimitWait: number;
 }
 
 /**
