@@ -172,12 +172,14 @@ export class TranslationService {
         if (response.success) {
           // 还原特殊内容
           const restoredText = restoreText(response.content, dictionary);
+          // 去除前后空格
+          const trimmedText = restoredText.trim();
           this.logger.info(`翻译成功 (${attempt + 1} 次尝试)`);
           this.logger.debug(`Translation successful after ${attempt + 1} attempt(s)`);
           
           return {
             success: true,
-            translatedText: restoredText,
+            translatedText: trimmedText,
             usage: response.usage,
           };
         }
