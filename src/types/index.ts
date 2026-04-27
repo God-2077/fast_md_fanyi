@@ -107,11 +107,17 @@ export interface FetchOpenAIConfig {
 /**
  * API 响应数据
  */
+/**
+ * 错误分类
+ */
+export type ErrorClassification = 'fatal' | 'retryable';
+
 export interface ResponseData {
   status: number;
   success: boolean;
   content: string;
   error: string;
+  errorClassification?: ErrorClassification;
   usage?: {
     promptTokens: number;
     completionTokens: number;
