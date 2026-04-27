@@ -3,17 +3,18 @@
  */
 
 export { Logger, LogLevel, globalLogger } from './logger';
-export { 
-  preservedHandle, 
-  restoreText, 
-  hasPlaceholder, 
-  cleanResidualPlaceholders 
+export {
+  preservedHandle,
+  restoreText,
+  hasPlaceholder,
+  cleanResidualPlaceholders
 } from './preservedText';
-export { 
-  generatePrompt, 
-  createTranslateSystemMessage, 
+export {
+  generatePrompt,
+  createTranslateSystemMessage,
   createTranslateUserMessage,
   createTranslateMessages,
-  DEFAULT_PROMPT_TEMPLATE 
+  DEFAULT_PROMPT_TEMPLATE
 } from './prompt';
 export { validateConfig, getConfigSummary } from './config';
+export { cleanupOutputFolder, buildOutputContent, copyOtherFiles } from './fileProcessor';

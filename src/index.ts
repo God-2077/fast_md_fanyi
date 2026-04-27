@@ -7,71 +7,15 @@ import { glob } from 'glob';
 import path from 'path';
 import fs from 'fs/promises';
 import fm from 'front-matter';
-import yaml from 'js-yaml';
 import crypto from 'crypto';
 
 import { Logger } from './utils/logger';
 import { translationConfig, openaiConfig, fileConfig, logLevelConfig } from './config';
-import { validateConfig, getConfigSummary } from './utils';
+import { validateConfig, getConfigSummary, cleanupOutputFolder, buildOutputContent, copyOtherFiles } from './utils';
 import { TranslationService } from './services/translation';
 import type { ProcessedFrontMatter, TranslationMeta } from './types';
 
-// 创建日志记录器
 const logger = new Logger(logLevelConfig, 'main');
-
-async function cleanupOutputFolder(
-  outputFolder: string,
-  outputFilesRecord: Set<string>,
-  logger: Logger
-): Promise<void> {
-  logger.info('正在清理未记录的文件...');
-  
-  const excludedDirs = fileConfig.ignore || ['node_modules', '.git', 'output', '.DS_Store'];
-  let deletedCount = 0;
-  
-  async function scanDir(dir: string): Promise<string[]> {
-    const entries = await fs.readdir(dir, { withFileTypes: true });
-    const files: string[] = [];
-    
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-      
-      if (entry.isDirectory()) {
-        if (excludedDirs.includes(entry.name)) continue;
-        const subFiles = await scanDir(fullPath);
-        files.push(...subFiles);
-        if (subFiles.length === 0) {
-          try {
-            await fs.rmdir(fullPath);
-            logger.info(`已删除空目录: ${path.relative(outputFolder, fullPath)}`);
-          } catch (error) {
-            logger.warn(`删除目录失败: ${fullPath}`, error);
-          }
-        }
-      } else if (entry.isFile()) {
-        files.push(fullPath);
-      }
-    }
-    
-    return files;
-  }
-  
-  const existingFiles = await scanDir(outputFolder);
-  
-  for (const filePath of existingFiles) {
-    if (!outputFilesRecord.has(filePath)) {
-      try {
-        await fs.unlink(filePath);
-        logger.info(`已删除: ${path.relative(outputFolder, filePath)}`);
-        deletedCount++;
-      } catch (error) {
-        logger.warn(`删除文件失败: ${filePath}`, error);
-      }
-    }
-  }
-  
-  logger.info(`清理完成，删除了 ${deletedCount} 个文件`);
-}
 
 /**
  * 主函数
@@ -79,7 +23,6 @@ async function cleanupOutputFolder(
 async function main(): Promise<void> {
   logger.info('=== 翻译工具启动 ===');
 
-  // 验证配置
   const configValidation = validateConfig();
   if (!configValidation.valid) {
     logger.error('配置验证失败:');
@@ -91,11 +34,9 @@ async function main(): Promise<void> {
 
   logger.info('配置摘要:', getConfigSummary());
 
-  // 解析文件夹路径
   const inputFolder = path.resolve(fileConfig.inputFolder);
   const outputBaseFolder = path.resolve(fileConfig.outputFolder);
 
-  // 查找所有 Markdown 文件
   logger.info(`正在扫描输入文件夹: ${inputFolder}`);
   const markdownFiles = await glob(`${inputFolder}/**/*.md`);
 
@@ -106,28 +47,24 @@ async function main(): Promise<void> {
 
   logger.info(`找到 ${markdownFiles.length} 个 Markdown 文件`);
 
-  // 创建翻译服务实例
   const translationService = new TranslationService(openaiConfig, translationConfig, logger);
 
   const { source, targets } = translationConfig;
   const sourceLang = source.fullName;
 
-  // 记录所有输出文件路径
   const outputFilesRecord = new Set<string>();
 
-  // 总统计
   let totalFilesTranslated = 0;
   let totalFilesSkipped = 0;
   let totalCopiedFiles = 0;
   let totalTokensUsed = 0;
   const startTime = Date.now();
 
-  // 按目标语言处理
   for (const target of targets) {
     const targetLang = target.shortName;
     const targetLangFullName = target.fullName;
     const targetLogger = logger.child(targetLang);
-    
+
     targetLogger.info(`开始处理目标语言: ${target.fullName} (${targetLang})`);
 
     for (let index = 0; index < markdownFiles.length; index++) {
@@ -146,7 +83,7 @@ async function main(): Promise<void> {
           translationService,
           targetLogger
         );
-        
+
         if (result.skipped) {
           totalFilesSkipped++;
         } else {
@@ -156,7 +93,7 @@ async function main(): Promise<void> {
             totalTokensUsed += result.usage.totalTokens;
           }
         }
-        
+
         const fileElapsed = Date.now() - fileStartTime;
         if (result.usage) {
           targetLogger.info(
@@ -167,14 +104,12 @@ async function main(): Promise<void> {
         }
       } catch (error) {
         targetLogger.error(`处理文件时发生错误: ${markdownFile}`, error);
-        // 跳过当前文件，继续处理下一个
         continue;
       }
     }
 
     targetLogger.info(`目标语言 ${target.fullName} (${targetLang}) 处理完成`);
 
-    // 复制其他文件（非 Markdown）
     if (fileConfig.copyOtherFiles) {
       const outputFolder = path.join(outputBaseFolder, targetLang);
       const copiedFiles = await copyOtherFiles(inputFolder, outputFolder, targetLogger);
@@ -184,7 +119,6 @@ async function main(): Promise<void> {
       totalCopiedFiles += copiedFiles.length;
     }
 
-    // 清理输出目录中未记录的文件
     await cleanupOutputFolder(path.join(outputBaseFolder, targetLang), outputFilesRecord, targetLogger);
   }
 
@@ -209,29 +143,25 @@ async function processMarkdownFile(
   translationService: TranslationService,
   fileLogger: Logger
 ): Promise<{ outputPath: string; skipped: boolean; usage?: { totalTokens: number } }> {
-  // 1. 读取文件并转换换行符 (CR → LF, CR+LF → LF)
   let markdownContent = await fs.readFile(filePath, 'utf-8');
   markdownContent = markdownContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  
+
   if (!markdownContent.trim()) {
     fileLogger.warn('文件内容为空，跳过');
     return { outputPath: '', skipped: false };
   }
 
-  // 2. 计算原文哈希值
   const contentHash = crypto.createHash('sha256').update(markdownContent).digest('hex');
 
-  // 3. 构建输出路径
   const relativePath = path.relative(inputFolder, filePath);
   const outputPath = path.join(outputBaseFolder, targetLang, relativePath);
 
-  // 4. 检查是否需要跳过（文件已存在且哈希值匹配）
   if (fileConfig.skipUnchanged) {
     try {
       const existingContent = await fs.readFile(outputPath, 'utf-8');
       const parsed = fm<Record<string, unknown>>(existingContent);
       const existingMeta = parsed.attributes.translationMeta as TranslationMeta | undefined;
-      
+
       if (existingMeta?.sourceHash === contentHash) {
         fileLogger.info(`原文未变更，跳过翻译: ${path.basename(outputPath)}`);
         return { outputPath, skipped: true };
@@ -241,12 +171,10 @@ async function processMarkdownFile(
     }
   }
 
-  // 5. 解析 front-matter 和正文
   const parsedContent = fm<Record<string, unknown>>(markdownContent);
   const rawFrontMatter = parsedContent.attributes || {};
   const rawMarkdownBody = parsedContent.body || '';
 
-  // 6. 翻译 front-matter 字段
   const { frontMatter: processedFrontMatter, usage: frontMatterUsage } = await translateFrontMatter(
     rawFrontMatter,
     sourceLang,
@@ -255,7 +183,6 @@ async function processMarkdownFile(
     fileLogger
   );
 
-  // 7. 翻译 Markdown 正文
   let translatedBody = rawMarkdownBody;
   let bodyUsage: { totalTokens: number } | undefined;
   if (rawMarkdownBody.trim()) {
@@ -268,17 +195,14 @@ async function processMarkdownFile(
     bodyUsage = bodyResult.usage;
   }
 
-  // 8. 添加翻译元数据到 front-matter
   processedFrontMatter.translationMeta = {
     translatedAt: new Date().toISOString(),
     model: openaiConfig.model,
     sourceHash: contentHash,
   };
 
-  // 9. 构建输出内容
   const finalContent = buildOutputContent(processedFrontMatter, translatedBody);
 
-  // 10. 写入输出文件
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
   await fs.writeFile(outputPath, finalContent, 'utf-8');
 
@@ -343,74 +267,6 @@ async function translateFrontMatter(
   };
 }
 
-/**
- * 构建输出内容
- */
-function buildOutputContent(
-  frontMatter: ProcessedFrontMatter,
-  body: string
-): string {
-  const keys = Object.keys(frontMatter);
-
-  if (keys.length === 0) {
-    return body;
-  }
-
-  const yamlStr = yaml.dump(frontMatter, {
-    indent: 2,
-    sortKeys: false,
-    noRefs: true,
-  });
-
-  return `---\n${yamlStr}---\n\n${body}`;
-}
-
-async function copyOtherFiles(
-  inputFolder: string,
-  outputFolder: string,
-  logger: Logger
-): Promise<string[]> {
-  logger.info('正在复制其他文件...');
-  
-  const excludedDirs = fileConfig.ignore || ['node_modules', '.git', 'output', '.DS_Store'];
-  const copiedFiles: string[] = [];
-  
-  async function scanDir(dir: string): Promise<string[]> {
-    const entries = await fs.readdir(dir, { withFileTypes: true });
-    const files: string[] = [];
-    
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-      
-      if (entry.isDirectory()) {
-        if (excludedDirs.includes(entry.name)) continue;
-        const subFiles = await scanDir(fullPath);
-        files.push(...subFiles);
-      } else if (entry.isFile() && !entry.name.endsWith('.md')) {
-        files.push(fullPath);
-      }
-    }
-    
-    return files;
-  }
-  
-  const otherFiles = await scanDir(inputFolder);
-  
-  for (const filePath of otherFiles) {
-    const relativePath = path.relative(inputFolder, filePath);
-    const destPath = path.join(outputFolder, relativePath);
-    
-    await fs.mkdir(path.dirname(destPath), { recursive: true });
-    await fs.copyFile(filePath, destPath);
-    copiedFiles.push(destPath);
-    logger.info(`已复制: ${relativePath}`);
-  }
-  
-  logger.info(`复制完成，共 ${otherFiles.length} 个文件`);
-  return copiedFiles;
-}
-
-// 启动程序
 main().catch((error) => {
   logger.error('程序执行失败', error);
   process.exit(1);
