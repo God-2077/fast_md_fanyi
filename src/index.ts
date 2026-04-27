@@ -159,6 +159,39 @@ async function main(): Promise<void> {
 /**
  * 处理单个 Markdown 文件
  */
+function shouldSkipTranslation(
+  frontMatter: Record<string, unknown>,
+  content: string,
+  fileLogger: Logger
+): boolean {
+  const skipMatches = translationConfig.skipMatches;
+  if (!skipMatches || skipMatches.length === 0) {
+    return false;
+  }
+
+  for (const match of skipMatches) {
+    if (match.field && match.fieldPattern) {
+      const fieldValue = frontMatter[match.field];
+      if (fieldValue !== undefined && fieldValue !== null) {
+        const fieldStr = String(fieldValue);
+        if (match.fieldPattern.test(fieldStr)) {
+          fileLogger.debug(`跳过匹配: field="${match.field}" matches "${match.fieldPattern}"`);
+          return true;
+        }
+      }
+    }
+
+    if (match.contentPattern) {
+      if (match.contentPattern.test(content)) {
+        fileLogger.debug(`跳过匹配: content matches "${match.contentPattern}"`);
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 async function processMarkdownFile(
   filePath: string,
   inputFolder: string,
@@ -200,6 +233,11 @@ async function processMarkdownFile(
   const parsedContent = fm<Record<string, unknown>>(markdownContent);
   const rawFrontMatter = parsedContent.attributes || {};
   const rawMarkdownBody = parsedContent.body || '';
+
+  if (shouldSkipTranslation(rawFrontMatter, rawMarkdownBody, fileLogger)) {
+    fileLogger.info(`跳过翻译: ${path.basename(outputPath)} (匹配跳过规则)`);
+    return { outputPath, skipped: true };
+  }
 
   const { frontMatter: processedFrontMatter, usage: frontMatterUsage } = await translateFrontMatter(
     rawFrontMatter,

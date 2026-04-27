@@ -20,6 +20,17 @@ export interface FrontMatterField {
   type: 'string' | 'string[]';
 }
 
+/**
+ * 跳过翻译匹配配置
+ * field: 指定 front-matter 字段名，配合 fieldPattern 匹配该字段值
+ * contentPattern: 直接匹配整个 content 内容
+ */
+export interface SkipMatch {
+  field?: string;
+  fieldPattern?: RegExp;
+  contentPattern?: RegExp;
+}
+
 // ============== 配置相关类型 ==============
 
 /**
@@ -31,6 +42,7 @@ export interface TranslationConfig {
   preservedFields: RegExp[];
   preservedTerms: RegExp[];
   frontMatter: FrontMatterField[];
+  skipMatches?: SkipMatch[];
 }
 
 /**
