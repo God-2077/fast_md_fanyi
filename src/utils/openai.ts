@@ -263,36 +263,66 @@ function handleJsonResponse(response: AxiosResponse, checkMangledCode?: boolean)
   };
 }
 
-function handleRequestError(error: unknown): ResponseData {
+const FATAL_STATUS_CODES = [400, 401, 402, 404, 405, 422, 500];
+
+function classifyError(error: unknown): { classification: 'fatal' | 'retryable'; message: string; status: number } {
   let status = 500;
-  let errorMessage = 'Unknown error';
+  let message = 'Unknown error';
 
   if (error instanceof AxiosError) {
     if (error.response) {
       status = error.response.status;
       const errorData = error.response.data;
-      errorMessage = errorData?.error?.message ||
-                     errorData?.error?.type ||
-                     JSON.stringify(errorData) ||
-                     error.message;
+      message = errorData?.error?.message ||
+               errorData?.error?.type ||
+               JSON.stringify(errorData) ||
+               error.message;
     } else if (error.request) {
-      errorMessage = 'No response received from server. Please check your network connection.';
+      message = 'No response received from server. Please check your network connection.';
+      status = 0;
     } else {
-      errorMessage = error.message;
+      message = error.message;
     }
-  } else if (error instanceof Error) {
-    errorMessage = error.message;
-  } else {
-    errorMessage = String(error);
+
+    if (status === 429) {
+      return { classification: 'retryable', message: `Rate limited (429): ${message}`, status };
+    }
+
+    if (FATAL_STATUS_CODES.includes(status)) {
+      return { classification: 'fatal', message, status };
+    }
+
+    if (status === 0) {
+      return { classification: 'retryable', message, status };
+    }
+
+    return { classification: 'retryable', message, status };
   }
 
-  logger.error(`OpenAI API 请求失败: ${errorMessage}`);
+  if (error instanceof Error) {
+    message = error.message;
+    if (message.includes('timeout') || message.includes('Timeout')) {
+      return { classification: 'retryable', message, status: 408 };
+    }
+    if (message.includes('ENOTFOUND') || message.includes('DNS') || message.includes('ECONNREFUSED')) {
+      return { classification: 'fatal', message, status: 0 };
+    }
+  }
+
+  return { classification: 'retryable', message, status };
+}
+
+function handleRequestError(error: unknown): ResponseData {
+  const { classification, message, status } = classifyError(error);
+
+  logger.error(`OpenAI API 请求失败: ${message} [${classification}]`);
 
   return {
     status,
     success: false,
     content: '',
-    error: errorMessage,
+    error: message,
+    errorClassification: classification,
   };
 }
 
