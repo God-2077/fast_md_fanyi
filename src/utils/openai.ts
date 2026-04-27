@@ -19,21 +19,18 @@ function checkForRepetition(
   patternLength: number = 18,
   repeatLimit: number = 5
 ): { success: false; error: string } | null {
-  if (text.length < patternLength) {
+  if (text.length < patternLength * repeatLimit) {
     return null;
   }
 
   const lastPattern = text.slice(-patternLength);
+  const expected = lastPattern.repeat(repeatLimit);
+  const lastSegment = text.slice(-patternLength * repeatLimit);
 
-  const escapedPattern = lastPattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const regex = new RegExp(escapedPattern, 'g');
-  const matches = text.match(regex);
-  const repeatCount = matches ? matches.length : 0;
-
-  if (repeatCount >= repeatLimit) {
+  if (lastSegment === expected) {
     return {
       success: false,
-      error: `检测到AI文本重复。最后${patternLength}个字符"${lastPattern}"在响应中重复出现了${repeatCount}次，已超过预设阈值（${repeatLimit}次）。请求已被中断。`
+      error: `检测到AI文本重复。最后${patternLength}个字符"${lastPattern}"在响应中重复出现了${repeatLimit}次，已超过预设阈值（${repeatLimit}次）。请求已被中断。`
     };
   }
 
