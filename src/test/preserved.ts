@@ -113,6 +113,7 @@ for (const test of tests) {
     
 const preserved = preservedHandle(test.text, testPatterns, []);
     const restored = restoreText(preserved.text, preserved.dictionary);
+    console.log('处理后:', JSON.stringify(preserved.text));
     
     if (restored === test.text) {
         console.log('✓ 通过');
