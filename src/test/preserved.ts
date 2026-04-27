@@ -1,13 +1,22 @@
+/**
+ * 保留内容处理测试
+ * 测试 preservedHandle 和 restoreText 函数的正确性
+ * 验证占位符替换和还原功能
+ */
+
 import { preservedHandle, restoreText } from '../utils/preservedText';
 
-const testPatterns = [
+const termPatterns = [
+    /\btoken\b/gi,
+    /\bAPI\b/gi,
+    /\bSDK\b/gi,
+];
+
+const fieldPatterns = [
     /```[\s\S]*?```/g,
     /`[^`]+`/g,
     /\$\$[\s\S]*?\$\$/g,
     /\$[^$\n]+\$/g,
-    /\btoken\b/gi,
-    /\bAPI\b/gi,
-    /\bSDK\b/gi,
 ];
 
 const tests = [
@@ -111,7 +120,7 @@ for (const test of tests) {
     console.log(`测试: ${test.name}`);
     console.log('='.repeat(60));
     
-const preserved = preservedHandle(test.text, testPatterns, []);
+const preserved = preservedHandle(test.text, termPatterns, fieldPatterns);
     const restored = restoreText(preserved.text, preserved.dictionary);
     console.log('处理后:', JSON.stringify(preserved.text));
     

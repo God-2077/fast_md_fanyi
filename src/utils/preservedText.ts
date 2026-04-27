@@ -7,27 +7,37 @@ import type { PreservedHandleResult } from '../types';
 
 /**
  * 生成唯一占位符前缀
+ * PTX: 用于保留字段（代码块、公式等）
+ * TERM: 用于保留术语（专业词汇）
  */
-const PLACEHOLDER_PREFIX = '<PTX_';
+const PTX_PREFIX = '<PTX_';
+const TERM_PREFIX = '<TERM_';
 const PLACEHOLDER_SUFFIX = '>';
 
 /**
- * 生成安全的唯一ID
+ * 生成简短的唯一ID（用于字段占位符）
  */
 let idCounter = 0;
 
-function generateUniqueId(): string {
-  const timestamp = Date.now().toString(36);
-  const random = Math.random().toString(36).substring(2, 10);
+function generateShortId(): string {
+  const random = Math.random().toString(36).substring(2, 6);
   idCounter++;
-  return `${timestamp}_${random}_${idCounter}`;
+  return `${idCounter}_${random}`;
 }
 
 /**
- * 创建占位符
+ * 创建字段占位符（简短格式）
  */
-function createPlaceholder(id: string): string {
-  return `${PLACEHOLDER_PREFIX}${id}${PLACEHOLDER_SUFFIX}`;
+function createFieldPlaceholder(id: string): string {
+  return `${PTX_PREFIX}${id}${PLACEHOLDER_SUFFIX}`;
+}
+
+/**
+ * 创建术语占位符，包含匹配的单词让 AI 更好地理解上下文
+ */
+function createTermPlaceholder(original: string): string {
+  const sanitized = original.replace(/[^a-zA-Z0-9_]/g, '_').replace(/^_+|_+$/g, '') || 'term';
+  return `${TERM_PREFIX}${sanitized}${PLACEHOLDER_SUFFIX}`;
 }
 
 /**
@@ -60,15 +70,12 @@ export function preservedHandle(
   const dictionary = new Map<string, string>();
   const usedPlaceholders = new Set<string>();
   
-  // 合并所有正则表达式
-  const allPatterns = [...sanitizeRegExpList(preservedTerms), ...sanitizeRegExpList(preservedFields)];
-  
-  if (allPatterns.length === 0) {
+  if (preservedTerms.length === 0 && preservedFields.length === 0) {
     return { text, dictionary };
   }
 
   // 先识别并保护文本中已有的占位符
-  const existingPlaceholderRegex = new RegExp(escapeRegExp(PLACEHOLDER_PREFIX) + '.+?' + escapeRegExp(PLACEHOLDER_SUFFIX), 'g');
+  const existingPlaceholderRegex = /<(?:PTX|TERM)_.+?>/g;
   let match: RegExpExecArray | null;
   while ((match = existingPlaceholderRegex.exec(text)) !== null) {
     const original = match[0];
@@ -78,44 +85,78 @@ export function preservedHandle(
     }
   }
 
-  // 按位置从后往前收集所有匹配项
+  // 匹配项类型
   interface Match {
     index: number;
     length: number;
     original: string;
     placeholder: string;
-}
+    type: 'term' | 'field';
+  }
 
   // 收集所有匹配项
   const matches: Match[] = [];
   
-  for (const pattern of allPatterns) {
-    // 重置正则表达式的 lastIndex
+  // 收集术语匹配
+  for (const pattern of sanitizeRegExpList(preservedTerms)) {
     const regex = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : pattern.flags + 'g');
     
-    let match: RegExpExecArray | null;
-    while ((match = regex.exec(text)) !== null) {
-      const original = match[0];
+    let m: RegExpExecArray | null;
+    while ((m = regex.exec(text)) !== null) {
+      const original = m[0];
       
-      // 跳过已经是占位符的完整匹配
-      if (original.startsWith(PLACEHOLDER_PREFIX) && original.endsWith(PLACEHOLDER_SUFFIX)) {
+      if (original.startsWith(PTX_PREFIX) && original.endsWith(PLACEHOLDER_SUFFIX)) {
         continue;
       }
-      
-      // 跳过与字典中已有内容完全相同的匹配（同一文本不应重复保护）
+      if (original.startsWith(TERM_PREFIX) && original.endsWith(PLACEHOLDER_SUFFIX)) {
+        continue;
+      }
       if (dictionary.has(original)) {
         continue;
       }
       
       matches.push({
-        index: match.index,
+        index: m.index,
         length: original.length,
         original,
         placeholder: '',
+        type: 'term',
+      });
+    }
+  }
+
+  // 收集字段匹配
+  for (const pattern of sanitizeRegExpList(preservedFields)) {
+    const regex = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : pattern.flags + 'g');
+    
+    let m: RegExpExecArray | null;
+    while ((m = regex.exec(text)) !== null) {
+      const original = m[0];
+      
+      if (original.startsWith(PTX_PREFIX) && original.endsWith(PLACEHOLDER_SUFFIX)) {
+        continue;
+      }
+      if (original.startsWith(TERM_PREFIX) && original.endsWith(PLACEHOLDER_SUFFIX)) {
+        continue;
+      }
+      if (dictionary.has(original)) {
+        continue;
+      }
+      
+      matches.push({
+        index: m.index,
+        length: original.length,
+        original,
+        placeholder: '',
+        type: 'field',
       });
     }
   }
   
+  if (matches.length === 0) {
+    return { text, dictionary };
+  }
+
   // 过滤重叠匹配：先按长度降序，再按位置升序排序
   matches.sort((a, b) => {
     if (b.length !== a.length) return b.length - a.length;
@@ -125,7 +166,6 @@ export function preservedHandle(
   const filteredMatches: Match[] = [];
   for (const match of matches) {
     const matchEnd = match.index + match.length;
-    // 检查是否被已过滤的匹配包含（完全包含关系）
     const isContained = filteredMatches.some(
       existing => existing.index <= match.index && (existing.index + existing.length) >= matchEnd
     );
@@ -141,44 +181,48 @@ export function preservedHandle(
   let resultText = text;
   const protectedRanges: { start: number; end: number }[] = [];
   
-  for (const match of filteredMatches) {
-    const matchEnd = match.index + match.length;
+  for (const m of filteredMatches) {
+    const matchEnd = m.index + m.length;
     
-    // 检查与已保护范围是否重叠
     const overlapsWithProtected = protectedRanges.some(
-      range => match.index < range.end && matchEnd > range.start
+      range => m.index < range.end && matchEnd > range.start
     );
     if (overlapsWithProtected) {
       continue;
     }
     
-    let placeholder = dictionary.get(match.original);
+    let placeholder = dictionary.get(m.original);
     
     if (!placeholder) {
-      // 生成唯一占位符
-      let id = generateUniqueId();
-      placeholder = createPlaceholder(id);
-      
-      // 确保占位符唯一
-      while (usedPlaceholders.has(placeholder)) {
-        id = generateUniqueId();
-        placeholder = createPlaceholder(id);
+      if (m.type === 'term') {
+        placeholder = createTermPlaceholder(m.original);
+        let counter = 1;
+        while (usedPlaceholders.has(placeholder)) {
+          const sanitized = m.original.replace(/[^a-zA-Z0-9_]/g, '_').replace(/^_+|_+$/g, '') || 'term';
+          placeholder = `${TERM_PREFIX}${sanitized}_${counter}${PLACEHOLDER_SUFFIX}`;
+          counter++;
+        }
+      } else {
+        let id = generateShortId();
+        placeholder = createFieldPlaceholder(id);
+        while (usedPlaceholders.has(placeholder)) {
+          id = generateShortId();
+          placeholder = createFieldPlaceholder(id);
+        }
       }
       
       usedPlaceholders.add(placeholder);
-      dictionary.set(match.original, placeholder);
+      dictionary.set(m.original, placeholder);
     }
     
-    match.placeholder = placeholder;
+    m.placeholder = placeholder;
     
-    // 替换文本中的内容
-    resultText = resultText.slice(0, match.index) + 
-                 match.placeholder + 
-                 resultText.slice(match.index + match.length);
+    resultText = resultText.slice(0, m.index) + 
+                 m.placeholder + 
+                 resultText.slice(m.index + m.length);
     
-    // 记录保护范围
-    const placeholderEnd = match.index + placeholder.length;
-    protectedRanges.push({ start: match.index, end: placeholderEnd });
+    const placeholderEnd = m.index + placeholder.length;
+    protectedRanges.push({ start: m.index, end: placeholderEnd });
   }
 
   return {
@@ -201,16 +245,19 @@ export function restoreText(processedText: string, dictionary: Map<string, strin
 
   let restoredText = processedText;
   
-  // 获取所有占位符，按长度从长到短排序
   const entries = Array.from(dictionary.entries())
     .sort(([, a], [, b]) => b.length - a.length);
 
   for (const [original, placeholder] of entries) {
-    if (!placeholder.startsWith(PLACEHOLDER_PREFIX) || !placeholder.endsWith(PLACEHOLDER_SUFFIX)) {
+    const isTermPlaceholder = placeholder.startsWith(TERM_PREFIX);
+    const isFieldPlaceholder = placeholder.startsWith(PTX_PREFIX);
+    if (!isTermPlaceholder && !isFieldPlaceholder) {
+      continue;
+    }
+    if (!placeholder.endsWith(PLACEHOLDER_SUFFIX)) {
       continue;
     }
     
-    // Use string replace instead of regex to avoid $ being interpreted as group reference
     restoredText = restoredText.split(placeholder).join(original);
   }
 
@@ -221,7 +268,7 @@ export function restoreText(processedText: string, dictionary: Map<string, strin
  * 检查文本是否包含占位符
  */
 export function hasPlaceholder(text: string): boolean {
-  return text.includes(PLACEHOLDER_PREFIX);
+  return text.includes(PTX_PREFIX) || text.includes(TERM_PREFIX);
 }
 
 /**
