@@ -40,6 +40,23 @@ function checkForRepetition(
   return null;
 }
 
+function checkContentQuality(text: string, checkMangledCode?: boolean, label?: string): { error: string } | null {
+  if (!text) return null;
+
+  const repetitionCheck = checkForRepetition(text);
+  if (repetitionCheck) {
+    const prefix = label ? `[${label}] ` : '';
+    return { error: prefix + repetitionCheck.error };
+  }
+
+  if (checkMangledCode && hasMangledCode(text)) {
+    const prefix = label ? `[${label}] ` : '';
+    return { error: prefix + '检测到响应内容含乱码（\\uFFFD），请求已被中断' };
+  }
+
+  return null;
+}
+
 async function handleNormalRequest(
   baseURL: string,
   headers: Record<string, string>,
@@ -72,6 +89,7 @@ async function handleStreamRequest(
 ): Promise<ResponseData> {
   return new Promise((resolve) => {
     let fullContent = '';
+    let fullReasoningContent = '';
     let resolved = false;
 
     const controller = new AbortController();
@@ -117,26 +135,23 @@ async function handleStreamRequest(
           try {
             const parsed = JSON.parse(data);
             const content = parsed.choices?.[0]?.delta?.content || '';
+            const reasoningContent = parsed.choices?.[0]?.delta?.reasoning_content || '';
+
             if (content) {
               fullContent += content;
+            }
+            if (reasoningContent) {
+              fullReasoningContent += reasoningContent;
+            }
 
-              const repetitionCheck = checkForRepetition(fullContent);
-              if (repetitionCheck) {
-                controller.abort();
-                clearTimeout(timeoutId);
-                if (!resolved) {
-                  resolved = true;
-                  resolve({
-                    status: 400,
-                    success: false,
-                    content: fullContent,
-                    error: repetitionCheck.error,
-                  });
-                }
-                return;
+            if (content || reasoningContent) {
+              let checkResult: { error: string } | null = null;
+              checkResult = checkContentQuality(fullContent, checkMangledCode, 'content');
+              if (!checkResult) {
+                checkResult = checkContentQuality(fullReasoningContent, checkMangledCode, 'reasoning');
               }
 
-              if (checkMangledCode && hasMangledCode(fullContent)) {
+              if (checkResult) {
                 controller.abort();
                 clearTimeout(timeoutId);
                 if (!resolved) {
@@ -145,7 +160,7 @@ async function handleStreamRequest(
                     status: 400,
                     success: false,
                     content: fullContent,
-                    error: '检测到响应内容含乱码（\\uFFFD），请求已被中断',
+                    error: checkResult.error,
                   });
                 }
                 return;
@@ -201,25 +216,27 @@ function handleJsonResponse(response: AxiosResponse, checkMangledCode?: boolean)
 
   if (status === 200 && data.choices && data.choices.length > 0) {
     const content = data.choices[0]?.message?.content || '';
+    const reasoningContent = data.choices[0]?.message?.reasoning_content || '';
 
-    const repetitionCheck = checkForRepetition(content);
-    if (repetitionCheck) {
-      logger.warn(`OpenAI API 响应内容检测到重复模式: ${repetitionCheck.error}`);
+    const contentCheck = checkContentQuality(content, checkMangledCode, 'content');
+    if (contentCheck) {
+      logger.warn(`OpenAI API 响应内容质量问题: ${contentCheck.error}`);
       return {
         status: 400,
         success: false,
-        content: content,
-        error: repetitionCheck.error,
+        content,
+        error: contentCheck.error,
       };
     }
 
-    if (checkMangledCode && hasMangledCode(content)) {
-      logger.warn('OpenAI API 响应内容检测到乱码');
+    const reasoningCheck = checkContentQuality(reasoningContent, checkMangledCode, 'reasoning');
+    if (reasoningCheck) {
+      logger.warn(`OpenAI API 响应推理内容质量问题: ${reasoningCheck.error}`);
       return {
         status: 400,
         success: false,
-        content: content,
-        error: '检测到响应内容含乱码（\\uFFFD）',
+        content,
+        error: reasoningCheck.error,
       };
     }
 
@@ -279,4 +296,4 @@ function handleRequestError(error: unknown): ResponseData {
   };
 }
 
-export { hasMangledCode, checkForRepetition, handleNormalRequest, handleStreamRequest, handleJsonResponse, handleRequestError };
+export { hasMangledCode, checkForRepetition, checkContentQuality, handleNormalRequest, handleStreamRequest, handleJsonResponse, handleRequestError };
