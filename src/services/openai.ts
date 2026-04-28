@@ -6,7 +6,7 @@
 import type { FetchOpenAIConfig, ResponseData, Message } from '../types';
 import { handleNormalRequest, handleStreamRequest } from '../utils/openai';
 import { Logger } from '../utils/logger';
-import { logLevelConfig } from '../config';
+import { logLevelConfig, openaiConfig } from '../config';
 
 const logger = new Logger(logLevelConfig, 'openai');
 
@@ -22,6 +22,19 @@ async function fetchOpenAIData(config: FetchOpenAIConfig): Promise<ResponseData>
     messages,
     checkMangledCode,
   } = config;
+
+  if (openaiConfig.mock) {
+    logger.info('[Mock 模式] 模拟 OpenAI API 响应');
+    const content = messages[messages.length - 1]?.content;
+    const text = typeof content === 'string' ? content : Array.isArray(content) ? content.map(c => c.text).join('') : '';
+    return {
+      status: 200,
+      success: true,
+      content: text,
+      error: '',
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+    };
+  }
 
   if (!apiKey) {
     return {
