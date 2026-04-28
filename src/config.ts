@@ -124,7 +124,9 @@ export const openaiConfig: OpenAIConfig = {
   // 429 速率限制等待时间（毫秒）
   rateLimitWait: 10000, // 默认10秒
   // 模拟模式（调试时不发起真实请求）
-  mock: process.env.OPENAI_MOCK === 'true',
+  mock: process.env.OPENAI_MOCK === 'true' || true,
+  // 模拟模式耗时（毫秒），设为 0 则使用随机耗时
+  mockDelay: 0,
 };
 
 /**
