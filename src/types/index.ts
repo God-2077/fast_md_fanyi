@@ -66,6 +66,7 @@ export interface OpenAIConfig {
   maxConsecutiveErrors: number;
   rateLimitWait: number;
   mock?: boolean;
+  mockDelay?: number;
 }
 
 /**

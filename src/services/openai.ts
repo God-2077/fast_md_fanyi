@@ -24,7 +24,9 @@ async function fetchOpenAIData(config: FetchOpenAIConfig): Promise<ResponseData>
   } = config;
 
   if (openaiConfig.mock) {
-    logger.info('[Mock 模式] 模拟 OpenAI API 响应');
+    const mockDelay = openaiConfig.mockDelay || Math.floor(Math.random() * 1500) + 500;
+    await new Promise(r => setTimeout(r, mockDelay));
+    logger.info(`[Mock 模式] 模拟耗时 ${mockDelay}ms，模拟 OpenAI API 响应`);
     const content = messages[messages.length - 1]?.content;
     const text = typeof content === 'string' ? content : Array.isArray(content) ? content.map(c => c.text).join('') : '';
     return {
