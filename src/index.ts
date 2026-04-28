@@ -90,6 +90,9 @@ async function main(): Promise<void> {
         if (result.skipped) {
           totalFilesSkipped++;
           consecutiveErrors = 0;
+          if (result.outputPath) {
+            outputFilesRecord.add(result.outputPath);
+          }
         } else {
           outputFilesRecord.add(result.outputPath);
           totalFilesTranslated++;
