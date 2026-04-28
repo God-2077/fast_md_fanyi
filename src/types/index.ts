@@ -183,6 +183,15 @@ export interface TranslateResult {
  */
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
+/**
+ * 日志配置
+ */
+export interface LogConfig {
+  level: LogLevel;
+  outputToFile: boolean;
+  filePath: string;
+}
+
 // ============== 应用级别类型 ==============
 
 /**
@@ -192,7 +201,7 @@ export interface AppConfig {
   translation: TranslationConfig;
   openai: OpenAIConfig;
   file: FileConfig;
-  logLevel: LogLevel;
+  log: LogConfig;
 }
 
 /**

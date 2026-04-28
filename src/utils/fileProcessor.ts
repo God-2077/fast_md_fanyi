@@ -7,7 +7,7 @@ import fs from 'fs/promises';
 import yaml from 'js-yaml';
 import type { ProcessedFrontMatter } from '../types';
 import { fileConfig } from '../config';
-import { Logger } from './logger';
+import type { Logger } from './logger';
 
 async function cleanupOutputFolder(
   outputFolder: string,
@@ -35,7 +35,7 @@ async function cleanupOutputFolder(
             await fs.rmdir(fullPath);
             logger.info(`已删除空目录: ${path.relative(outputFolder, fullPath)}`);
           } catch (error) {
-            logger.warn(`删除目录失败: ${fullPath}`, error);
+            logger.warn({ error: error instanceof Error ? error.message : error }, `删除目录失败: ${fullPath}`);
           }
         }
       } else if (entry.isFile()) {
@@ -55,7 +55,7 @@ async function cleanupOutputFolder(
         logger.info(`已删除: ${path.relative(outputFolder, filePath)}`);
         deletedCount++;
       } catch (error) {
-        logger.warn(`删除文件失败: ${filePath}`, error);
+        logger.warn({ error: error instanceof Error ? error.message : error }, `删除文件失败: ${filePath}`);
       }
     }
   }

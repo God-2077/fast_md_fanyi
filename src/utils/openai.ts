@@ -5,10 +5,13 @@
 
 import axios, { AxiosError, type AxiosResponse } from 'axios';
 import type { ResponseData } from '../types';
-import { Logger } from './logger';
-import { logLevelConfig } from '../config';
+import { createLogger } from './logger';
 
-const logger = new Logger(logLevelConfig, 'openai');
+const logger = createLogger({
+  level: 'info',
+  outputToFile: false,
+  filePath: './logs/app.log',
+}, 'openai');
 
 function hasMangledCode(str: string): boolean {
   return /\uFFFD/.test(str);

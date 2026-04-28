@@ -5,10 +5,14 @@
 
 import type { FetchOpenAIConfig, ResponseData, Message } from '../types';
 import { handleNormalRequest, handleStreamRequest } from '../utils/openai';
-import { Logger } from '../utils/logger';
-import { logLevelConfig, openaiConfig } from '../config';
+import { createLogger } from '../utils/logger';
+import { openaiConfig } from '../config';
 
-const logger = new Logger(logLevelConfig, 'openai');
+const logger = createLogger({
+  level: 'info',
+  outputToFile: false,
+  filePath: './logs/app.log',
+}, 'openai');
 
 async function fetchOpenAIData(config: FetchOpenAIConfig): Promise<ResponseData> {
   const {

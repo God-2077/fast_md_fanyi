@@ -9,13 +9,13 @@ import fs from 'fs/promises';
 import fm from 'front-matter';
 import crypto from 'crypto';
 
-import { Logger } from './utils/logger';
-import { translationConfig, openaiConfig, fileConfig, logLevelConfig } from './config';
+import { createLogger, type Logger } from './utils/logger';
+import { translationConfig, openaiConfig, fileConfig, logConfig } from './config';
 import { validateConfig, getConfigSummary, cleanupOutputFolder, buildOutputContent, copyOtherFiles } from './utils';
 import { TranslationService, TranslationServiceError } from './services/translation';
 import type { ProcessedFrontMatter, TranslationMeta } from './types';
 
-const logger = new Logger(logLevelConfig, 'main');
+const logger = createLogger(logConfig, 'main');
 
 /**
  * 主函数
@@ -32,7 +32,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  logger.info('配置摘要:', getConfigSummary());
+  logger.info({ config: getConfigSummary() }, '配置摘要');
 
   const inputFolder = path.resolve(fileConfig.inputFolder);
   const outputBaseFolder = path.resolve(fileConfig.outputFolder);
@@ -66,7 +66,7 @@ async function main(): Promise<void> {
   for (const target of targets) {
     const targetLang = target.shortName;
     const targetLangFullName = target.fullName;
-    const targetLogger = logger.child(targetLang);
+    const targetLogger = logger.child({ module: targetLang });
 
     targetLogger.info(`开始处理目标语言: ${target.fullName} (${targetLang})`);
 

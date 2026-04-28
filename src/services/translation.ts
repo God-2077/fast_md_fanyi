@@ -8,13 +8,19 @@ import type {
   OpenAIConfig, 
   FetchOpenAIConfig, 
   TranslateOptions,
-  TranslateResult
+  TranslateResult,
+  LogConfig
 } from '../types';
-import { Logger } from '../utils/logger';
+import { Logger, createLogger } from '../utils/logger';
 import { preservedHandle, restoreText } from '../utils/preservedText';
 import { createTranslateMessages } from '../utils/prompt';
 import { fetchOpenAIData } from '../services/openai';
-import { logLevelConfig } from '../config';
+
+const defaultLogConfig: LogConfig = {
+  level: 'info',
+  outputToFile: false,
+  filePath: './logs/app.log',
+};
 
 /**
  * 翻译服务错误
@@ -41,7 +47,7 @@ export class TranslationService {
   ) {
     this.config = openaiConfig;
     this.translationConfig = translationConfig;
-    this.logger = logger || new Logger(logLevelConfig, 'TranslationService');
+    this.logger = logger || createLogger(defaultLogConfig, 'TranslationService');
   }
 
   private delay(ms: number): Promise<void> {

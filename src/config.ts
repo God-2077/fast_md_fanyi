@@ -8,13 +8,17 @@ import type {
   OpenAIConfig, 
   FileConfig,
   AppConfig,
-  LogLevel
+  LogConfig
 } from './types';
 
 /**
- * 日志级别配置
+ * 日志配置
  */
-export const logLevelConfig: LogLevel = (process.env.LOG_LEVEL as LogLevel) || 'debug';
+export const logConfig: LogConfig = {
+  level: (process.env.LOG_LEVEL as LogConfig['level']) || 'debug',
+  outputToFile: process.env.LOG_OUTPUT_TO_FILE === 'true' || false,
+  filePath: process.env.LOG_FILE_PATH || './logs/app.log',
+};
 
 /**
  * 翻译配置
@@ -118,7 +122,7 @@ export const openaiConfig: OpenAIConfig = {
   // 429 速率限制等待时间（毫秒）
   rateLimitWait: 10000, // 默认10秒
   // 模拟模式（调试时不发起真实请求）
-  mock: process.env.OPENAI_MOCK === 'true',
+  mock: process.env.OPENAI_MOCK === 'true' || true,
 };
 
 /**
@@ -148,7 +152,7 @@ export const appConfig: AppConfig = {
   translation: translationConfig,
   openai: openaiConfig,
   file: fileConfig,
-  logLevel: logLevelConfig,
+  log: logConfig,
 };
 
 

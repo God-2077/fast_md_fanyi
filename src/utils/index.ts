@@ -2,7 +2,8 @@
  * 工具模块导出
  */
 
-export { Logger, LogLevel, globalLogger } from './logger';
+export { createLogger, globalLogger } from './logger';
+export type { Logger } from './logger';
 export {
   preservedHandle,
   restoreText,

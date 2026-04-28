@@ -1,4 +1,4 @@
-import { translationConfig, openaiConfig, fileConfig, logLevelConfig } from '../config';
+import { translationConfig, openaiConfig, fileConfig, logConfig } from '../config';
 
 export function validateConfig(): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
@@ -35,7 +35,9 @@ export function validateConfig(): { valid: boolean; errors: string[] } {
 
 export function getConfigSummary(): Record<string, unknown> {
   return {
-    logLevel: logLevelConfig,
+    logLevel: logConfig.level,
+    logOutputToFile: logConfig.outputToFile,
+    logFilePath: logConfig.filePath,
     sourceLanguage: translationConfig.source,
     targetLanguages: translationConfig.targets.map(t => t.fullName),
     model: openaiConfig.model,
