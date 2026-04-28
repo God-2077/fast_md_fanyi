@@ -65,6 +65,7 @@ export interface OpenAIConfig {
   maxRetriesBehavior: 'skip' | 'exit';
   maxConsecutiveErrors: number;
   rateLimitWait: number;
+  mock?: boolean;
 }
 
 /**

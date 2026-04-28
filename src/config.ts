@@ -117,6 +117,8 @@ export const openaiConfig: OpenAIConfig = {
   maxConsecutiveErrors: 5, // 连续失败5个文件后退出
   // 429 速率限制等待时间（毫秒）
   rateLimitWait: 10000, // 默认10秒
+  // 模拟模式（调试时不发起真实请求）
+  mock: process.env.OPENAI_MOCK === 'true',
 };
 
 /**
