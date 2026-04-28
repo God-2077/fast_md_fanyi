@@ -70,6 +70,9 @@ export const translationConfig: TranslationConfig = {
     /\bAPI\b/gi,
     /\bSDK\b/gi,
   ],
+  // 是否让 preservedTerms 使用和 preservedFields 一样的 <PTX_> 占位符格式
+  // 设为 true 时，术语占位符会像字段一样使用简短ID，而不是包含原文的 <TERM_xxx> 格式
+  preservedTermsUseFieldPlaceholder: false,
   // 跳过翻译匹配配置
   skipMatches: [
     // {

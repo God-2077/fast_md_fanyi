@@ -41,6 +41,7 @@ export interface TranslationConfig {
   targets: LanguageDefinition[];
   preservedFields: RegExp[];
   preservedTerms: RegExp[];
+  preservedTermsUseFieldPlaceholder?: boolean;
   frontMatter: FrontMatterField[];
   skipMatches?: SkipMatch[];
 }

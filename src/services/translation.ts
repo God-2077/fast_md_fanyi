@@ -66,7 +66,8 @@ export class TranslationService {
       text,
       options,
       this.translationConfig.preservedTerms,
-      this.translationConfig.preservedFields
+      this.translationConfig.preservedFields,
+      this.translationConfig.preservedTermsUseFieldPlaceholder
     );
 
     if (!result.success) {
@@ -97,7 +98,8 @@ export class TranslationService {
       text,
       options,
       this.translationConfig.preservedTerms,
-      []
+      [],
+      this.translationConfig.preservedTermsUseFieldPlaceholder
     );
 
     if (!result.success) {
@@ -138,7 +140,8 @@ export class TranslationService {
     text: string,
     options: TranslateOptions,
     preservedTerms: RegExp[],
-    preservedFields: RegExp[]
+    preservedFields: RegExp[],
+    preservedTermsUseFieldPlaceholder = false
   ): Promise<TranslateResult> {
     const maxRetries = options.retryCount || 3;
     let lastError: string = '';
@@ -159,7 +162,8 @@ export class TranslationService {
         const { text: processedText, dictionary } = preservedHandle(
           text,
           preservedTerms,
-          preservedFields
+          preservedFields,
+          preservedTermsUseFieldPlaceholder
         );
 
         // 更新消息内容

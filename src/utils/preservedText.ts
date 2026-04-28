@@ -65,7 +65,8 @@ function sanitizeRegExpList(patterns: RegExp[]): RegExp[] {
 export function preservedHandle(
   text: string,
   preservedTerms: RegExp[],
-  preservedFields: RegExp[]
+  preservedFields: RegExp[],
+  preservedTermsUseFieldPlaceholder = false
 ): PreservedHandleResult {
   const dictionary = new Map<string, string>();
   const usedPlaceholders = new Set<string>();
@@ -194,7 +195,7 @@ export function preservedHandle(
     let placeholder = dictionary.get(m.original);
     
     if (!placeholder) {
-      if (m.type === 'term') {
+      if (m.type === 'term' && !preservedTermsUseFieldPlaceholder) {
         placeholder = createTermPlaceholder(m.original);
         let counter = 1;
         while (usedPlaceholders.has(placeholder)) {
