@@ -305,8 +305,8 @@ function classifyError(error: unknown): { classification: 'fatal' | 'retryable';
       return { classification: 'fatal', message, status: 0 };
     }
   }
-
-  return { classification: 'retryable', message, status };
+  // 未知错误，返回 fatal
+  return { classification: 'fatal', message, status };
 }
 
 function handleRequestError(error: unknown): ResponseData {
