@@ -12,9 +12,15 @@ import type {
 } from './types';
 
 /**
- * 日志级别配置
+ * 日志配置
  */
-export const logLevelConfig: LogLevel = (process.env.LOG_LEVEL as LogLevel) || 'debug';
+export const logConfig = {
+  level: (process.env.LOG_LEVEL as LogLevel) || 'debug',
+  writeToFile: process.env.LOG_TO_FILE === 'true' || false,
+  filePath: process.env.LOG_FILE_PATH || './logs/app.log',
+};
+
+export const logLevelConfig: LogLevel = logConfig.level;
 
 /**
  * 翻译配置
