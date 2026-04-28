@@ -1,98 +1,105 @@
 /**
- * 日志模块 - 提供统一的日志记录功能
+ * 日志模块 - 基于 pino 的统一日志记录
+ * 支持美化输出 (pino-pretty) 和可选的 JSON 文件输出
  */
 
-export enum LogLevel {
-  DEBUG = 0,
-  INFO = 1,
-  WARN = 2,
-  ERROR = 3,
+import pino from 'pino';
+import fs from 'fs';
+import path from 'path';
+import { logConfig } from '../config';
+
+function createPino(logLevel: string): pino.Logger {
+  const targets: pino.TransportTargetOptions[] = [
+    {
+      target: 'pino-pretty',
+      level: logLevel,
+      options: {
+        colorize: true,
+        translateTime: 'SYS:yyyy-mm-dd HH:MM:ss',
+        ignore: 'pid,hostname',
+        singleLine: false,
+        errorProps: 'stack',
+      },
+    },
+  ];
+
+  if (logConfig.writeToFile) {
+    const logDir = path.dirname(logConfig.filePath);
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true });
+    }
+    targets.push({
+      target: 'pino/file',
+      level: logLevel,
+      options: { destination: logConfig.filePath },
+    });
+  }
+
+  return pino({
+    level: logLevel,
+    transport: {
+      targets,
+    },
+  });
 }
 
-const LEVEL_NAMES: Record<LogLevel, string> = {
-  [LogLevel.DEBUG]: 'DEBUG',
-  [LogLevel.INFO]: 'INFO',
-  [LogLevel.WARN]: 'WARN',
-  [LogLevel.ERROR]: 'ERROR',
-};
-
-/**
- * 日志记录器类
- */
 export class Logger {
-  private level: LogLevel;
+  private pinoInstance: pino.Logger;
+  private level: string;
   private prefix: string;
 
-  constructor(level: 'debug' | 'info' | 'warn' | 'error' = 'info', prefix = '') {
+  constructor(level: string = 'info', prefix: string = '') {
+    this.level = level;
     this.prefix = prefix;
-    this.level = this.parseLevel(level);
+    this.pinoInstance = createPino(level);
   }
 
-  private parseLevel(level: string): LogLevel {
-    const levelMap: Record<string, LogLevel> = {
-      debug: LogLevel.DEBUG,
-      info: LogLevel.INFO,
-      warn: LogLevel.WARN,
-      error: LogLevel.ERROR,
-    };
-    return levelMap[level] ?? LogLevel.INFO;
-  }
-
-  private shouldLog(level: LogLevel): boolean {
-    return level >= this.level;
-  }
-
-  private formatMessage(level: LogLevel, message: string): string {
-    const timestamp = new Date().toISOString();
-    const levelName = LEVEL_NAMES[level];
-    const prefixStr = this.prefix ? `[${this.prefix}] ` : '';
-    return `${timestamp} ${levelName} ${prefixStr}${message}`;
+  private fmt(message: string): string {
+    return this.prefix ? `[${this.prefix}] ${message}` : message;
   }
 
   debug(message: string, ...args: unknown[]): void {
-    if (this.shouldLog(LogLevel.DEBUG)) {
-      const formattedArgs = args.length > 0 ? ' ' + args.map(a => JSON.stringify(a)).join(' ') : '';
-      console.debug(this.formatMessage(LogLevel.DEBUG, message + formattedArgs));
+    if (args.length > 0) {
+      this.pinoInstance.debug(
+        this.fmt(`${message} ${args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ')}`)
+      );
+    } else {
+      this.pinoInstance.debug(this.fmt(message));
     }
   }
 
   info(message: string, ...args: unknown[]): void {
-    if (this.shouldLog(LogLevel.INFO)) {
-      const formattedArgs = args.length > 0 ? ' ' + args.map(a => JSON.stringify(a)).join(' ') : '';
-      console.info(this.formatMessage(LogLevel.INFO, message + formattedArgs));
+    if (args.length > 0) {
+      this.pinoInstance.info(
+        this.fmt(`${message} ${args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ')}`)
+      );
+    } else {
+      this.pinoInstance.info(this.fmt(message));
     }
   }
 
-  warn(message: string, ...args: unknown[]): void {
-    if (this.shouldLog(LogLevel.WARN)) {
-      const formattedArgs = args.length > 0 ? ' ' + args.map(a => JSON.stringify(a)).join(' ') : '';
-      console.warn(this.formatMessage(LogLevel.WARN, message + formattedArgs));
+  warn(message: string, error?: unknown): void {
+    if (error instanceof Error) {
+      this.pinoInstance.warn({ err: error }, this.fmt(message));
+    } else if (error !== undefined) {
+      this.pinoInstance.warn(this.fmt(`${message} ${JSON.stringify(error)}`));
+    } else {
+      this.pinoInstance.warn(this.fmt(message));
     }
   }
 
   error(message: string, error?: unknown): void {
-    if (this.shouldLog(LogLevel.ERROR)) {
-      const errorInfo = error instanceof Error 
-        ? `\n  Error: ${error.message}\n  Stack: ${error.stack}`
-        : error ? `\n  Details: ${String(error)}` : '';
-      console.error(this.formatMessage(LogLevel.ERROR, message) + errorInfo);
+    if (error instanceof Error) {
+      this.pinoInstance.error({ err: error }, this.fmt(message));
+    } else if (error !== undefined) {
+      this.pinoInstance.error(this.fmt(`${message} ${JSON.stringify(error)}`));
+    } else {
+      this.pinoInstance.error(this.fmt(message));
     }
   }
 
-  /**
-   * 创建子日志器
-   */
   child(prefix: string): Logger {
-    return new Logger(
-      this.level === LogLevel.DEBUG ? 'debug' : 
-      this.level === LogLevel.INFO ? 'info' : 
-      this.level === LogLevel.WARN ? 'warn' : 'error',
-      this.prefix ? `${this.prefix}:${prefix}` : prefix
-    );
+    const nestedPrefix = this.prefix ? `${this.prefix}:${prefix}` : prefix;
+    return new Logger(this.level, nestedPrefix);
   }
 }
-
-/**
- * 全局日志实例
- */
-export const globalLogger = new Logger('info', 'app');
