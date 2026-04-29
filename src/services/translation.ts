@@ -12,6 +12,7 @@ import type {
 } from '../types';
 import { Logger } from '../utils/logger';
 import { preservedHandle, restoreText } from '../utils/preservedText';
+import { splitMarkdownIntoChunks } from '../utils/textChunker';
 import { createTranslateMessages } from '../utils/prompt';
 import { fetchOpenAIData } from '../services/openai';
 import { logLevelConfig } from '../config';
@@ -50,12 +51,18 @@ export class TranslationService {
 
   /**
    * 翻译 Markdown 内容
+   * 如果内容超过 maxCharLength，自动分块翻译
    */
   async translateMarkdown(
     text: string,
     sourceLanguage: string,
     targetLanguage: string
   ): Promise<{ translatedText: string; usage?: { totalTokens: number } }> {
+    const maxCharLength = this.translationConfig.maxCharLength;
+    if (maxCharLength && text.length > maxCharLength) {
+      return this.translateMarkdownChunked(text, sourceLanguage, targetLanguage, maxCharLength);
+    }
+
     const options: TranslateOptions = {
       sourceLanguage,
       targetLanguage,
@@ -77,6 +84,56 @@ export class TranslationService {
     return {
       translatedText: result.translatedText!,
       usage: result.usage,
+    };
+  }
+
+  /**
+   * 分块翻译 Markdown 内容
+   */
+  private async translateMarkdownChunked(
+    text: string,
+    sourceLanguage: string,
+    targetLanguage: string,
+    maxCharLength: number
+  ): Promise<{ translatedText: string; usage?: { totalTokens: number } }> {
+    const chunks = splitMarkdownIntoChunks(text, maxCharLength);
+    this.logger.info(`内容长度 ${text.length} 超过限制 ${maxCharLength}，分割为 ${chunks.length} 个块`);
+
+    const options: TranslateOptions = {
+      sourceLanguage,
+      targetLanguage,
+      retryCount: this.config.retryCount,
+    };
+
+    const translatedChunks: string[] = [];
+    let totalTokens = 0;
+
+    for (let i = 0; i < chunks.length; i++) {
+      this.logger.debug(`翻译第 ${i + 1}/${chunks.length} 个块 (${chunks[i].length} 字符)`);
+
+      const result = await this.executeTranslation(
+        chunks[i],
+        options,
+        this.translationConfig.preservedTerms,
+        this.translationConfig.preservedFields,
+        this.translationConfig.preservedTermsUseFieldPlaceholder
+      );
+
+      if (!result.success) {
+        throw new Error(`Block ${i + 1} translation failed: ${result.error}`);
+      }
+
+      translatedChunks.push(result.translatedText!);
+      if (result.usage) {
+        totalTokens += result.usage.totalTokens;
+      }
+    }
+
+    this.logger.info(`分块翻译完成，共 ${chunks.length} 个块`);
+
+    return {
+      translatedText: translatedChunks.join('\n\n'),
+      usage: { totalTokens },
     };
   }
 
