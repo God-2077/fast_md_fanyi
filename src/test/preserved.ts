@@ -12,6 +12,8 @@ const termPatterns = [
     /\bSDK\b/gi,
 ];
 
+const preservedTermsUseFieldPlaceholder = true;
+
 const fieldPatterns = [
     /```[\s\S]*?```/g,
     /`[^`]+`/g,
@@ -120,7 +122,7 @@ for (const test of tests) {
     console.log(`测试: ${test.name}`);
     console.log('='.repeat(60));
     
-const preserved = preservedHandle(test.text, termPatterns, fieldPatterns);
+const preserved = preservedHandle(test.text, termPatterns, fieldPatterns, preservedTermsUseFieldPlaceholder);
     const restored = restoreText(preserved.text, preserved.dictionary);
     console.log('处理后:', JSON.stringify(preserved.text));
     
