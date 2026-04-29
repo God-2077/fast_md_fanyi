@@ -13,9 +13,33 @@ import { Logger } from './utils/logger';
 import { translationConfig, openaiConfig, fileConfig, logLevelConfig } from './config';
 import { validateConfig, getConfigSummary, cleanupOutputFolder, buildOutputContent, copyOtherFiles } from './utils';
 import { TranslationService, TranslationServiceError } from './services/translation';
-import type { ProcessedFrontMatter, TranslationMeta } from './types';
+import type { ProcessedFrontMatter, TranslationMeta, HeaderFooterSingleConfig } from './types';
 
 const logger = new Logger(logLevelConfig, 'main');
+
+/**
+ * 格式化页眉页脚，替换占位符
+ */
+function formatHeaderFooter(
+  config: HeaderFooterSingleConfig | undefined,
+  replacements: Record<string, string>
+): { header: string; footer: string } {
+  const header = config?.header || '';
+  const footer = config?.footer || '';
+
+  const formatText = (text: string): string => {
+    let result = text;
+    for (const [key, value] of Object.entries(replacements)) {
+      result = result.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
+    }
+    return result;
+  };
+
+  return {
+    header: formatText(header),
+    footer: formatText(footer),
+  };
+}
 
 /**
  * 主函数
@@ -83,6 +107,7 @@ async function main(): Promise<void> {
           sourceLang,
           targetLang,
           targetLangFullName,
+          source.shortName,
           translationService,
           targetLogger
         );
@@ -202,6 +227,7 @@ async function processMarkdownFile(
   sourceLang: string,
   targetLang: string,
   targetLanguage: string,
+  sourceShortName: string,
   translationService: TranslationService,
   fileLogger: Logger
 ): Promise<{ outputPath: string; skipped: boolean; usage?: { totalTokens: number } }> {
@@ -268,7 +294,28 @@ async function processMarkdownFile(
     sourceHash: contentHash,
   };
 
-  const finalContent = buildOutputContent(processedFrontMatter, translatedBody);
+  let finalBody = translatedBody;
+  const headerFooterConfig = translationConfig.headerFooter;
+  if (headerFooterConfig) {
+    const specificConfig = headerFooterConfig[targetLang] || headerFooterConfig.default;
+    const replacements = {
+      model: openaiConfig.model,
+      local: new Date().toLocaleString(),
+      targetLanguage: targetLanguage,
+      sourceLanguage: sourceLang,
+      targetLang,
+      sourceLang: sourceShortName,
+    };
+    const { header, footer } = formatHeaderFooter(specificConfig, replacements);
+    if (header) {
+      finalBody = header + '\n\n' + finalBody;
+    }
+    if (footer) {
+      finalBody = finalBody + '\n\n' + footer;
+    }
+  }
+
+  const finalContent = buildOutputContent(processedFrontMatter, finalBody);
 
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
   await fs.writeFile(outputPath, finalContent, 'utf-8');
