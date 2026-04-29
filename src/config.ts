@@ -86,6 +86,14 @@ export const translationConfig: TranslationConfig = {
     // },
   ],
   // 页眉页脚配置
+  // 占位符说明：
+  // {model} - AI 模型名称
+  // {local} - 本地时间
+  // {targetLanguage} - 目标语言全称（如"英文"）
+  // {sourceLanguage} - 源语言全称（如"简体中文"）
+  // {targetLang} - 目标语言简写（如"en"）
+  // {sourceLang} - 源语言简写（如"zh"）
+  // 未匹配的占位符保留原样
   headerFooter: {
     default: {
       // header: 'Translated from {sourceLang} to {targetLang} using {model}',
