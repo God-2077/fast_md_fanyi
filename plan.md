@@ -107,6 +107,8 @@
 在翻译后的文件页头页尾添加段落，支持占位符: {model} {local} {targetLanguage} {sourceLanguage} {targetLang} {sourceLang}
 占位符在翻译时替换，未填充的占位符保留原样
 
+另外可单独设置 en 等翻译语言的页眉页脚，优先级更高
+
 ## 19. 智能分块
 
 - [ ] 完成
