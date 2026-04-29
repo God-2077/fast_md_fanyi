@@ -85,6 +85,18 @@ export const translationConfig: TranslationConfig = {
     //   contentPattern: /<!--\s*skip\s*-->/gi,
     // },
   ],
+  // 页眉页脚配置
+  headerFooter: {
+    default: {
+      // header: 'Translated from {sourceLang} to {targetLang} using {model}',
+      // footer: 'Translation completed at {local}',
+    },
+    // 可针对特定语言设置不同的页眉页脚，优先级高于 default
+    // en: {
+    //   header: 'Translated to English using {model}',
+    //   footer: 'Completed: {local}',
+    // },
+  },
 };
 
 /**
