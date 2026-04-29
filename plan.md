@@ -102,7 +102,7 @@
 
 ## 18. 页眉页脚
 
-- [ ] 完成
+- [x] 完成
 
 在翻译后的文件页头页尾添加段落，支持占位符: {model} {local} {targetLanguage} {sourceLanguage} {targetLang} {sourceLang}
 占位符在翻译时替换，未填充的占位符保留原样

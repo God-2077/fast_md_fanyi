@@ -31,6 +31,25 @@ export interface SkipMatch {
   contentPattern?: RegExp;
 }
 
+/**
+ * 单语言页眉页脚配置
+ */
+export interface HeaderFooterSingleConfig {
+  header?: string;
+  footer?: string;
+}
+
+/**
+ * 页眉页脚配置
+ * key 为语言简写（如 'en', 'ja'），value 为该语言的配置
+ * default 为默认配置
+ * 特定语言配置优先级高于 default
+ */
+export interface HeaderFooterConfig {
+  default: HeaderFooterSingleConfig;
+  [key: string]: HeaderFooterSingleConfig;
+}
+
 // ============== 配置相关类型 ==============
 
 /**
@@ -44,6 +63,7 @@ export interface TranslationConfig {
   preservedTermsUseFieldPlaceholder?: boolean;
   frontMatter: FrontMatterField[];
   skipMatches?: SkipMatch[];
+  headerFooter?: HeaderFooterConfig;
 }
 
 /**
