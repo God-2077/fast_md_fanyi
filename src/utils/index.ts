@@ -18,3 +18,5 @@ export {
 } from './prompt';
 export { validateConfig, getConfigSummary } from './config';
 export { cleanupOutputFolder, buildOutputContent, copyOtherFiles } from './fileProcessor';
+export { createReportData, writeReport } from './report';
+export type { ReportData } from './report';

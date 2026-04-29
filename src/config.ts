@@ -7,6 +7,7 @@ import type {
   TranslationConfig, 
   OpenAIConfig, 
   FileConfig,
+  ReportConfig,
   AppConfig,
   LogLevel
 } from './types';
@@ -105,6 +106,9 @@ export const translationConfig: TranslationConfig = {
     //   footer: 'Completed: {local}',
     // },
   },
+  // 智能分块最大字符数（超过时自动分块翻译）
+  // 设为 0 或不设置则禁用分块
+  maxCharLength: 4000,
 };
 
 /**
@@ -173,12 +177,21 @@ export const fileConfig: FileConfig = {
 };
 
 /**
+ * 翻译报告配置
+ */
+export const reportConfig: ReportConfig = {
+  enabled: process.env.REPORT_ENABLED === 'true' || true,
+  outputPath: process.env.REPORT_OUTPUT || './output/translation-report.json',
+};
+
+/**
  * 完整的应用配置
  */
 export const appConfig: AppConfig = {
   translation: translationConfig,
   openai: openaiConfig,
   file: fileConfig,
+  report: reportConfig,
   logLevel: logLevelConfig,
 };
 

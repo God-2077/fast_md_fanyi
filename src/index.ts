@@ -10,10 +10,10 @@ import fm from 'front-matter';
 import crypto from 'crypto';
 
 import { Logger } from './utils/logger';
-import { translationConfig, openaiConfig, fileConfig, logLevelConfig } from './config';
-import { validateConfig, getConfigSummary, cleanupOutputFolder, buildOutputContent, copyOtherFiles } from './utils';
+import { translationConfig, openaiConfig, fileConfig, logLevelConfig, reportConfig } from './config';
+import { validateConfig, getConfigSummary, cleanupOutputFolder, buildOutputContent, copyOtherFiles, createReportData, writeReport } from './utils';
 import { TranslationService, TranslationServiceError } from './services/translation';
-import type { ProcessedFrontMatter, TranslationMeta, HeaderFooterSingleConfig } from './types';
+import type { ProcessedFrontMatter, TranslationMeta, HeaderFooterSingleConfig, FileReportEntry, ReportSummary } from './types';
 
 const logger = new Logger(logLevelConfig, 'main');
 
@@ -78,6 +78,8 @@ async function main(): Promise<void> {
 
   const outputFilesRecord = new Set<string>();
 
+  const fileReports: FileReportEntry[] = [];
+
   let totalFilesTranslated = 0;
   let totalFilesSkipped = 0;
   let totalCopiedFiles = 0;
@@ -112,12 +114,25 @@ async function main(): Promise<void> {
           targetLogger
         );
 
+        const fileElapsed = Date.now() - fileStartTime;
+
         if (result.skipped) {
           totalFilesSkipped++;
           consecutiveErrors = 0;
           if (result.outputPath) {
             outputFilesRecord.add(result.outputPath);
           }
+          fileReports.push({
+            sourceFile: markdownFile,
+            outputFile: result.outputPath,
+            targetLang,
+            success: true,
+            skipped: true,
+            skipReason: result.skipReason,
+            sourceHash: result.sourceHash,
+            tokensUsed: result.usage?.totalTokens || 0,
+            elapsedMs: fileElapsed,
+          });
         } else {
           outputFilesRecord.add(result.outputPath);
           totalFilesTranslated++;
@@ -125,9 +140,18 @@ async function main(): Promise<void> {
           if (result.usage) {
             totalTokensUsed += result.usage.totalTokens;
           }
+          fileReports.push({
+            sourceFile: markdownFile,
+            outputFile: result.outputPath,
+            targetLang,
+            success: true,
+            skipped: false,
+            sourceHash: result.sourceHash,
+            tokensUsed: result.usage?.totalTokens || 0,
+            elapsedMs: fileElapsed,
+          });
         }
 
-        const fileElapsed = Date.now() - fileStartTime;
         if (result.usage) {
           targetLogger.info(
             `耗时: ${(fileElapsed / 1000).toFixed(2)}s, Tokens: ${result.usage.totalTokens}`
@@ -138,6 +162,17 @@ async function main(): Promise<void> {
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
         const isFatal = error instanceof TranslationServiceError && error.fatal;
+
+        const fileElapsed = Date.now() - fileStartTime;
+        fileReports.push({
+          sourceFile: markdownFile,
+          outputFile: '',
+          targetLang,
+          success: false,
+          skipped: false,
+          failureReason: errorMsg,
+          elapsedMs: fileElapsed,
+        });
 
         if (isFatal) {
           targetLogger.error(`致命错误，程序终止: ${errorMsg}`);
@@ -182,6 +217,22 @@ async function main(): Promise<void> {
     `翻译: ${totalFilesTranslated} 个文件, 跳过: ${totalFilesSkipped} 个文件, 复制: ${totalCopiedFiles} 个文件`
   );
   logger.info(`总耗时: ${(totalElapsed / 1000).toFixed(2)}s, 总Tokens: ${totalTokensUsed}`);
+
+  if (reportConfig.enabled) {
+    const totalFailed = fileReports.filter(f => !f.success).length;
+    const summary: ReportSummary = {
+      totalFiles: markdownFiles.length,
+      totalTranslated: totalFilesTranslated,
+      totalSkipped: totalFilesSkipped,
+      totalFailed,
+      totalCopiedFiles,
+      totalElapsedMs: totalElapsed,
+      totalTokens: totalTokensUsed,
+      targetLanguages: targets.map(t => t.fullName),
+    };
+    const report = createReportData(summary, fileReports);
+    await writeReport(report);
+  }
 }
 
 /**
@@ -230,13 +281,13 @@ async function processMarkdownFile(
   sourceShortName: string,
   translationService: TranslationService,
   fileLogger: Logger
-): Promise<{ outputPath: string; skipped: boolean; usage?: { totalTokens: number } }> {
+): Promise<{ outputPath: string; skipped: boolean; usage?: { totalTokens: number }; sourceHash: string; skipReason?: string }> {
   let markdownContent = await fs.readFile(filePath, 'utf-8');
   markdownContent = markdownContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
   if (!markdownContent.trim()) {
     fileLogger.warn('文件内容为空，跳过');
-    return { outputPath: '', skipped: false };
+    return { outputPath: '', skipped: true, sourceHash: '', skipReason: 'file content empty' };
   }
 
   const contentHash = crypto.createHash('sha256').update(markdownContent).digest('hex');
@@ -252,7 +303,7 @@ async function processMarkdownFile(
 
       if (existingMeta?.sourceHash === contentHash) {
         fileLogger.info(`原文未变更，跳过翻译: ${path.basename(outputPath)}`);
-        return { outputPath, skipped: true };
+        return { outputPath, skipped: true, sourceHash: contentHash, skipReason: 'source content unchanged' };
       }
     } catch {
       // 文件不存在，继续翻译
@@ -265,7 +316,7 @@ async function processMarkdownFile(
 
   if (shouldSkipTranslation(rawFrontMatter, rawMarkdownBody, fileLogger)) {
     fileLogger.info(`跳过翻译: ${path.basename(outputPath)} (匹配跳过规则)`);
-    return { outputPath, skipped: true };
+    return { outputPath, skipped: true, sourceHash: contentHash, skipReason: 'matched skip rule' };
   }
 
   const { frontMatter: processedFrontMatter, usage: frontMatterUsage } = await translateFrontMatter(
@@ -326,6 +377,7 @@ async function processMarkdownFile(
   return {
     outputPath,
     skipped: false,
+    sourceHash: contentHash,
     usage: totalUsage > 0 ? { totalTokens: totalUsage } : undefined,
   };
 }

@@ -64,6 +64,7 @@ export interface TranslationConfig {
   frontMatter: FrontMatterField[];
   skipMatches?: SkipMatch[];
   headerFooter?: HeaderFooterConfig;
+  maxCharLength?: number;
 }
 
 /**
@@ -102,6 +103,54 @@ export interface FileConfig {
   preserveFolders: boolean;
   copyOtherFiles: boolean;
   skipUnchanged: boolean;
+}
+
+/**
+ * 翻译报告配置
+ */
+export interface ReportConfig {
+  enabled: boolean;
+  outputPath: string;
+}
+
+/**
+ * 单个文件的翻译报告条目
+ */
+export interface FileReportEntry {
+  sourceFile: string;
+  outputFile: string;
+  targetLang: string;
+  success: boolean;
+  skipped: boolean;
+  skipReason?: string;
+  sourceHash?: string;
+  failureReason?: string;
+  tokensUsed?: number;
+  elapsedMs: number;
+}
+
+/**
+ * 翻译报告摘要
+ */
+export interface ReportSummary {
+  totalFiles: number;
+  totalTranslated: number;
+  totalSkipped: number;
+  totalFailed: number;
+  totalCopiedFiles: number;
+  totalElapsedMs: number;
+  totalTokens: number;
+  targetLanguages: string[];
+}
+
+/**
+ * 翻译报告
+ */
+export interface TranslationReport {
+  config: Record<string, unknown>;
+  summary: ReportSummary;
+  files: FileReportEntry[];
+  generatedAt: string;
 }
 
 // ============== OpenAI API 相关类型 ==============
@@ -214,6 +263,7 @@ export interface AppConfig {
   translation: TranslationConfig;
   openai: OpenAIConfig;
   file: FileConfig;
+  report: ReportConfig;
   logLevel: LogLevel;
 }
 
