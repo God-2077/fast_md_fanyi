@@ -61,3 +61,8 @@ logger.info( complexObj )
 //         city: "Beijing"
 //         street: "100000"
 //     }
+
+
+// 中文测试
+logger.info('中文测试')
+logger.warn('中文警告测试')
