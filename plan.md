@@ -107,7 +107,21 @@
 在翻译后的文件页头页尾添加段落，支持占位符: {model} {local} {targetLanguage} {sourceLanguage} {targetLang} {sourceLang}
 占位符在翻译时替换，未填充的占位符保留原样
 
-## 19. 翻译报告
+## 19. 智能分块
+
+- [ ] 完成
+
+当 Markdown 内容过长时，自动将其分割成多个小块进行翻译，保持 Markdown 结构完整性：
+- 代码块不拆散
+- 列表项不拆散
+- 段落保持完整
+- 分块后逐块翻译，最后合并
+
+配置项：
+- chunkSize: 单块最大 token 数（默认 1000）
+- minChunkSize: 最小块 token 数
+
+## 20. 翻译报告
 
 - [ ] 完成
 
