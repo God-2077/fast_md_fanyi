@@ -43,7 +43,7 @@ function getEnvBool(key: string, defaultValue: boolean): boolean {
 export const logConfig = {
   level: getEnvString('LOG_LEVEL', 'debug') as LogLevel,
   writeToFile: getEnvBool('LOG_TO_FILE', true),
-  filePath: getEnvString('LOG_FILE_PATH', './logs/app.log'),
+  filePath: getEnvString('LOG_FILE_PATH', './logs/app-{local}.log'),
 };
 
 export const logLevelConfig: LogLevel = logConfig.level;
@@ -63,10 +63,10 @@ export const translationConfig: TranslationConfig = {
       fullName: 'english',
       shortName: 'en',
     },
-    // {
-      // fullName: 'japanese',
-      // shortName: 'ja',
-    // },
+    {
+      fullName: 'japanese',
+      shortName: 'ja',
+    },
   ],
   // 需要翻译的 front-matter 字段
   frontMatter: [
@@ -127,25 +127,43 @@ export const translationConfig: TranslationConfig = {
   // 占位符说明：
   // {model} - AI 模型名称
   // {local} - 本地时间
-  // {targetLanguage} - 目标语言全称（如"英文"）
-  // {sourceLanguage} - 源语言全称（如"简体中文"）
+  // {targetLanguage} - 目标语言全称（如"english"）
+  // {sourceLanguage} - 源语言全称（如"Simplified Chinese"）
   // {targetLang} - 目标语言简写（如"en"）
   // {sourceLang} - 源语言简写（如"zh"）
   // 未匹配的占位符保留原样
   headerFooter: {
     default: {
-      header: 'Translated from {sourceLang} to {targetLang} using {model}',
-      footer: 'Translation completed at {local}',
+      header: `:::info
+由 AI 模型 **{model}** 翻译。
+
+源语言：{sourceLanguage}，目标语言：{targetLanguage}，翻译时间：{local}。
+
+**AI 翻译仅供参考，不保证内容完全准确，请以原文为准。**
+:::`,
+      // footer: 'Translation completed at {local}',
     },
     // 可针对特定语言设置不同的页眉页脚，优先级高于 default
-    en: {
-      header: 'Translated to English using {model}',
-      footer: 'Completed: {local}',
-    },
-    ja: {
-      header: '{model} を使用して英語に翻訳済み',
-      footer: '完了時刻: {local}',
-    },
+      en: {
+        header: `:::info
+Translated by AI model **{model}**.
+
+Source Language: {sourceLanguage}, Target Language: {targetLanguage}, Translation Time: {local}.
+
+**AI translation is for reference only. Accuracy is not guaranteed, please refer to the original text.**
+:::`,
+        footer: '',
+      },
+      ja: {
+        header: `:::info
+AIモデル **{model}** による翻訳。
+
+原文言語：{sourceLanguage}、翻訳先言語：{targetLanguage}、翻訳時間：{local}。
+
+**AI翻訳は参考に限り、内容の完全な正確性を保証できません。原文をご参照ください。**
+:::`,
+        footer: '',
+      }
   },
   // 智能分块最大字符数（超过时自动分块翻译）
   // 设为 0 或不设置则禁用分块
@@ -212,7 +230,7 @@ export const openaiConfig: OpenAIConfig = {
   // 429 速率限制等待时间（毫秒）
   rateLimitWait: 10000, // 默认10秒
   // 模拟模式（调试时不发起真实请求）
-  mock: getEnvBool('OPENAI_MOCK', false),
+  mock: getEnvBool('OPENAI_MOCK', true),
   // 模拟模式耗时（毫秒），设为 0 则使用随机耗时
   mockDelay: 0,
 };
@@ -234,7 +252,7 @@ export const fileConfig: FileConfig = {
  */
 export const reportConfig: ReportConfig = {
   enabled: getEnvBool('REPORT_ENABLED', true),
-  outputPath: getEnvString('REPORT_OUTPUT', './output/translation-report.json'),
+  outputPath: getEnvString('REPORT_OUTPUT', './output/translation-report-{local}.json'),
 };
 
 /**

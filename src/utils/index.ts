@@ -16,7 +16,7 @@ export {
   createTranslateMessages,
   DEFAULT_PROMPT_TEMPLATE
 } from './prompt';
-export { validateConfig, getConfigSummary } from './config';
+export { validateConfig, getConfigSummary, formatLocalTime } from './config';
 export { cleanupOutputFolder, buildOutputContent, copyOtherFiles } from './fileProcessor';
 export { createReportData, writeReport } from './report';
 export type { ReportData } from './report';

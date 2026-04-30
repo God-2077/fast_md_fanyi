@@ -2,7 +2,7 @@ import path from 'path';
 import fs from 'fs/promises';
 import type { TranslationReport, FileReportEntry, ReportSummary } from '../types';
 import { reportConfig } from '../config';
-import { getConfigSummary } from './config';
+import { getConfigSummary, formatLocalTime } from './config';
 import { Logger } from './logger';
 import { logLevelConfig } from '../config';
 
@@ -32,7 +32,7 @@ export async function writeReport(report: TranslationReport): Promise<void> {
     return;
   }
 
-  const outputPath = path.resolve(reportConfig.outputPath);
+  const outputPath = path.resolve(reportConfig.outputPath.replace(/\{local\}/g, formatLocalTime('file')));
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
 
   const content = JSON.stringify(report, null, 2);
