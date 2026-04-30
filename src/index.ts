@@ -12,7 +12,7 @@ import pLimit from 'p-limit';
 
 import { Logger } from './utils/logger';
 import { translationConfig, openaiConfig, fileConfig, logLevelConfig, reportConfig } from './config';
-import { validateConfig, getConfigSummary, cleanupOutputFolder, buildOutputContent, copyOtherFiles, createReportData, writeReport } from './utils';
+import { formatLocalTime, validateConfig, getConfigSummary, cleanupOutputFolder, buildOutputContent, copyOtherFiles, createReportData, writeReport } from './utils';
 import { TranslationService, TranslationServiceError } from './services/translation';
 import type { ProcessedFrontMatter, TranslationMeta, HeaderFooterSingleConfig, FileReportEntry, ReportSummary } from './types';
 
@@ -466,7 +466,7 @@ async function processMarkdownFile(
     const specificConfig = headerFooterConfig[targetLang] || headerFooterConfig.default;
     const replacements = {
       model: openaiConfig.model,
-      local: new Date().toLocaleString(),
+      local: formatLocalTime('display'),
       targetLanguage: targetLanguage,
       sourceLanguage: sourceLang,
       targetLang,

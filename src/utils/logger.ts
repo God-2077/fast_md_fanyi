@@ -10,6 +10,7 @@ import pino from 'pino';
 import fs from 'fs';
 import path from 'path';
 import { logConfig } from '../config';
+import { formatLocalTime } from './config';
 
 let sharedPino: pino.Logger | null = null;
 
@@ -30,14 +31,15 @@ function getPinoSingleton(level: string): pino.Logger {
     ];
 
     if (logConfig.writeToFile) {
-      const logDir = path.dirname(logConfig.filePath);
+      const resolvedFilePath = logConfig.filePath.replace(/\{local\}/g, formatLocalTime('file'));
+      const logDir = path.dirname(resolvedFilePath);
       if (!fs.existsSync(logDir)) {
         fs.mkdirSync(logDir, { recursive: true });
       }
       targets.push({
         target: 'pino/file',
         level,
-        options: { destination: logConfig.filePath },
+        options: { destination: resolvedFilePath },
       });
     }
 

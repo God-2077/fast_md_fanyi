@@ -1,5 +1,16 @@
 import { translationConfig, openaiConfig, fileConfig, logLevelConfig } from '../config';
 
+function pad(n: number): string {
+  return n.toString().padStart(2, '0');
+}
+
+export function formatLocalTime(type: 'file' | 'display' = 'display'): string {
+  const now = new Date();
+  const date = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const time = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  return type === 'file' ? `${date}_${time.replace(/:/g, '-')}` : `${date} ${time}`;
+}
+
 export function validateConfig(): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
 
