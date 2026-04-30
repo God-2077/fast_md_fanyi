@@ -3,22 +3,47 @@
  * 集中管理所有配置项，支持环境变量覆盖
  */
 
-import type { 
-  TranslationConfig, 
-  OpenAIConfig, 
+import type {
+  TranslationConfig,
+  OpenAIConfig,
   FileConfig,
   ReportConfig,
   AppConfig,
   LogLevel
 } from './types';
 
+// ========== 辅助函数：仅在环境变量未定义时使用默认值 ==========
+
+/**
+ * 读取环境变量，若为 undefined 则使用默认字符串值
+ * 空字符串、'false' 等仍会保留为实际值
+ */
+function getEnvString(key: string, defaultValue: string): string {
+  const val = process.env[key];
+  return val === undefined ? defaultValue : val;
+}
+
+/**
+ * 读取布尔型环境变量
+ * - 未定义 → 使用 defaultValue
+ * - 'true'  → true
+ * - 其他   → false
+ */
+function getEnvBool(key: string, defaultValue: boolean): boolean {
+  const val = process.env[key];
+  if (val === undefined) return defaultValue;
+  return val === 'true';
+}
+
+// ========== 配置对象 ==========
+
 /**
  * 日志配置
  */
 export const logConfig = {
-  level: (process.env.LOG_LEVEL as LogLevel) || 'debug',
-  writeToFile: process.env.LOG_TO_FILE === 'true' || false,
-  filePath: process.env.LOG_FILE_PATH || './logs/app.log',
+  level: getEnvString('LOG_LEVEL', 'debug') as LogLevel,
+  writeToFile: getEnvBool('LOG_TO_FILE', true),
+  filePath: getEnvString('LOG_FILE_PATH', './logs/app.log'),
 };
 
 export const logLevelConfig: LogLevel = logConfig.level;
@@ -29,19 +54,19 @@ export const logLevelConfig: LogLevel = logConfig.level;
 export const translationConfig: TranslationConfig = {
   // 源语言
   source: {
-    fullName: '简体中文',
-    shortName: 'zh',
+    fullName: 'Simplified Chinese',
+    shortName: 'zh-CN',
   },
   // 目标语言
   targets: [
     {
-      fullName: '英文',
+      fullName: 'english',
       shortName: 'en',
     },
-    // {
-      // fullName: '日文',
-      // shortName: 'ja',
-    // },
+    {
+      fullName: 'japanese',
+      shortName: 'ja',
+    },
   ],
   // 需要翻译的 front-matter 字段
   frontMatter: [
@@ -57,21 +82,25 @@ export const translationConfig: TranslationConfig = {
       field: 'tags',
       type: 'string[]',
     },
+    {
+      field: 'categories',
+      type: 'string[]',
+    },
   ],
   // 保留字段（不会被翻译）
   preservedFields: [
-    /```[\s\S]*?```/g,           // 代码块
-    /^:::encrypted[\s\S]*?^:::/gm,  // 加密块
+    /```[\s\S]*?```/g,                    // 代码块
+    /^:::encrypted[\s\S]*?^:::/gm,        // 加密块
     /^\+\+\+(primary|danger|warning) /gm, // 折叠快开头
-    /^\+\+\+$/gm, // 折叠块结束
-    
-    // /`[^`]+`/g,                   // 行内代码
-    /\$\$[\s\S]*?\$\$/g,         // 数学公式块
-    /\$[^$\n]+\$/g,              // 行内数学公式
+    /^\+\+\+$/gm,                         // 折叠块结束
+
+    // /`[^`]+`/g,                        // 行内代码
+    /\$\$[\s\S]*?\$\$/g,                  // 数学公式块
+    /\$[^$\n]+\$/g,                       // 行内数学公式
   ],
   // 保留术语（不会被翻译）
   preservedTerms: [
-    /\btoken\b/gi,               // 技术术语示例
+    /\btoken\b/gi, // 技术术语示例
     /\bAPI\b/gi,
   ],
   // 是否让 preservedTerms 使用和 preservedFields 一样的 <PTX_> 占位符格式
@@ -105,14 +134,18 @@ export const translationConfig: TranslationConfig = {
   // 未匹配的占位符保留原样
   headerFooter: {
     default: {
-      // header: 'Translated from {sourceLang} to {targetLang} using {model}',
-      // footer: 'Translation completed at {local}',
+      header: 'Translated from {sourceLang} to {targetLang} using {model}',
+      footer: 'Translation completed at {local}',
     },
     // 可针对特定语言设置不同的页眉页脚，优先级高于 default
-    // en: {
-    //   header: 'Translated to English using {model}',
-    //   footer: 'Completed: {local}',
-    // },
+    en: {
+      header: 'Translated to English using {model}',
+      footer: 'Completed: {local}',
+    },
+    ja: {
+      header: '{model} を使用して英語に翻訳済み',
+      footer: '完了時刻: {local}',
+    },
   },
   // 智能分块最大字符数（超过时自动分块翻译）
   // 设为 0 或不设置则禁用分块
@@ -124,11 +157,11 @@ export const translationConfig: TranslationConfig = {
  */
 export const openaiConfig: OpenAIConfig = {
   // API Key - 建议通过环境变量 OPENAI_API_KEY 设置
-  apiKey: process.env.OPENAI_API_KEY || 'sk-fgvymgrplbdychhplgzavprlkvhxloticxennehpastjetlf',
+  apiKey: getEnvString('OPENAI_API_KEY', 'sk-fgvymgrplbdychhplgzavprlkvhxloticxennehpastjetlf'),
   // API 基础地址
-  baseURL: process.env.OPENAI_BASE_URL || 'https://api.siliconflow.cn/v1',
+  baseURL: getEnvString('OPENAI_BASE_URL', 'https://api.siliconflow.cn/v1'),
   // 模型名称
-  model: process.env.OPENAI_MODEL || 'Qwen/Qwen3-8B',
+  model: getEnvString('OPENAI_MODEL', 'Qwen/Qwen3-8B'),
 //   Qwen/Qwen3-8B Qwen/Qwen2.5-7B-Instruct
   // 温度参数 (0-1)
   temperature: 0.5,
@@ -161,7 +194,7 @@ export const openaiConfig: OpenAIConfig = {
   // 请求超时时间（毫秒）
   timeout: 1000 * 60, // 5 分钟
   // 并发请求数
-  threadCount: 3,
+  threadCount: 2,
   // 重试次数
   retryCount: 3,
   // 是否检测乱码
@@ -179,7 +212,7 @@ export const openaiConfig: OpenAIConfig = {
   // 429 速率限制等待时间（毫秒）
   rateLimitWait: 10000, // 默认10秒
   // 模拟模式（调试时不发起真实请求）
-  mock: process.env.OPENAI_MOCK === 'true' || true,
+  mock: getEnvBool('OPENAI_MOCK', false),
   // 模拟模式耗时（毫秒），设为 0 则使用随机耗时
   mockDelay: 0,
 };
@@ -200,8 +233,8 @@ export const fileConfig: FileConfig = {
  * 翻译报告配置
  */
 export const reportConfig: ReportConfig = {
-  enabled: process.env.REPORT_ENABLED === 'true' || true,
-  outputPath: process.env.REPORT_OUTPUT || './output/translation-report.json',
+  enabled: getEnvBool('REPORT_ENABLED', true),
+  outputPath: getEnvString('REPORT_OUTPUT', './output/translation-report.json'),
 };
 
 /**
@@ -215,11 +248,9 @@ export const appConfig: AppConfig = {
   logLevel: logLevelConfig,
 };
 
-
-
 /**
  * 根据系统提示词和内容智能计算 maxTokens 和 timeout
- * @param systemPrompt 系统提示词
+ * @param _systemPrompt 系统提示词
  * @param content 待翻译内容
  * @returns 智能计算的 maxTokens 和 timeout
  */
