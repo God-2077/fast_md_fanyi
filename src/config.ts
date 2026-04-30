@@ -75,17 +75,21 @@ export const translationConfig: TranslationConfig = {
       type: 'string',
     },
     {
+      field: 'keywords',
+      type: 'string[]',
+    },
+    {
       field: 'description',
       type: 'string',
     },
-    {
-      field: 'tags',
-      type: 'string[]',
-    },
-    {
-      field: 'categories',
-      type: 'string[]',
-    },
+    // {
+      // field: 'tags',
+      // type: 'string[]',
+    // },
+    // {
+      // field: 'categories',
+      // type: 'string[]',
+    // },
   ],
   // 保留字段（不会被翻译）
   preservedFields: [
@@ -93,6 +97,7 @@ export const translationConfig: TranslationConfig = {
     /^:::encrypted[\s\S]*?^:::/gm,        // 加密块
     /^\+\+\+(primary|danger|warning) /gm, // 折叠快开头
     /^\+\+\+$/gm,                         // 折叠块结束
+    /^:::(warning|success|info|primary)?\s*$/gm,
 
     // /`[^`]+`/g,                        // 行内代码
     /\$\$[\s\S]*?\$\$/g,                  // 数学公式块
@@ -230,7 +235,7 @@ export const openaiConfig: OpenAIConfig = {
   // 429 速率限制等待时间（毫秒）
   rateLimitWait: 10000, // 默认10秒
   // 模拟模式（调试时不发起真实请求）
-  mock: getEnvBool('OPENAI_MOCK', true),
+  mock: getEnvBool('OPENAI_MOCK', false),
   // 模拟模式耗时（毫秒），设为 0 则使用随机耗时
   mockDelay: 0,
 };
