@@ -61,8 +61,7 @@ export const translationConfig: TranslationConfig = {
   // 保留字段（不会被翻译）
   preservedFields: [
     /```[\s\S]*?```/g,           // 代码块
-    /^:::encrypted[\s\S]*?^:::/gm
-,  // 加密块
+    /^:::encrypted[\s\S]*?^:::/gm,  // 加密块
     /^\+\+\+(primary|danger|warning) /gm, // 折叠快开头
     /^\+\+\+$/gm, // 折叠块结束
     
