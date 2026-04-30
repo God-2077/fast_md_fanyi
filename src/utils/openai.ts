@@ -87,6 +87,7 @@ async function handleStreamRequest(
   return new Promise((resolve) => {
     let fullContent = '';
     let fullReasoningContent = '';
+    let lastUsage: ResponseData['usage'] = undefined;
     let resolved = false;
 
     const controller = new AbortController();
@@ -124,6 +125,7 @@ async function handleStreamRequest(
                 success: true,
                 content: fullContent,
                 error: '',
+                usage: lastUsage,
               });
             }
             return;
@@ -131,6 +133,15 @@ async function handleStreamRequest(
 
           try {
             const parsed = JSON.parse(data);
+
+            if (parsed.usage) {
+              lastUsage = {
+                promptTokens: parsed.usage.prompt_tokens || 0,
+                completionTokens: parsed.usage.completion_tokens || 0,
+                totalTokens: parsed.usage.total_tokens || 0,
+              };
+            }
+
             const content = parsed.choices?.[0]?.delta?.content || '';
             const reasoningContent = parsed.choices?.[0]?.delta?.reasoning_content || '';
 
@@ -178,6 +189,7 @@ async function handleStreamRequest(
             success: true,
             content: fullContent,
             error: '',
+            usage: lastUsage,
           });
         }
       });

@@ -103,8 +103,6 @@ export interface FileConfig {
   inputFolder: string;
   ignore: string[];
   outputFolder: string;
-  fileName: string;
-  filePath: string;
   preserveFolders: boolean;
   copyOtherFiles: boolean;
   skipUnchanged: boolean;
