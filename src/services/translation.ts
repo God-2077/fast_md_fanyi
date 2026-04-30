@@ -74,7 +74,8 @@ export class TranslationService {
       options,
       this.translationConfig.preservedTerms,
       this.translationConfig.preservedFields,
-      this.translationConfig.preservedTermsUseFieldPlaceholder
+      this.translationConfig.preservedTermsUseFieldPlaceholder,
+      'markdown'
     );
 
     if (!result.success) {
@@ -116,7 +117,8 @@ export class TranslationService {
         options,
         this.translationConfig.preservedTerms,
         this.translationConfig.preservedFields,
-        this.translationConfig.preservedTermsUseFieldPlaceholder
+        this.translationConfig.preservedTermsUseFieldPlaceholder,
+        'markdown'
       );
 
       if (!result.success) {
@@ -156,7 +158,8 @@ export class TranslationService {
       options,
       this.translationConfig.preservedTerms,
       [],
-      this.translationConfig.preservedTermsUseFieldPlaceholder
+      this.translationConfig.preservedTermsUseFieldPlaceholder,
+      'text'
     );
 
     if (!result.success) {
@@ -191,6 +194,20 @@ export class TranslationService {
   }
 
   /**
+   * 获取提示词模板
+   * 根据翻译类型返回对应的提示词模板
+   */
+  private getPromptTemplate(type: 'markdown' | 'text'): string {
+    if (type === 'markdown') {
+      return this.config.markdownPromptTemplate || this.config.promptTemplate || '';
+    }
+    if (type === 'text') {
+      return this.config.textPromptTemplate || this.config.promptTemplate || '';
+    }
+    return '';
+  }
+
+  /**
    * 执行翻译的核心逻辑
    */
   private async executeTranslation(
@@ -198,18 +215,20 @@ export class TranslationService {
     options: TranslateOptions,
     preservedTerms: RegExp[],
     preservedFields: RegExp[],
-    preservedTermsUseFieldPlaceholder = false
+    preservedTermsUseFieldPlaceholder = false,
+    type: 'markdown' | 'text' = 'markdown'
   ): Promise<TranslateResult> {
     const maxRetries = options.retryCount || 3;
     let lastError: string = '';
 
-    this.logger.info(`开始翻译: ${options.sourceLanguage} -> ${options.targetLanguage}`);
+    this.logger.info(`开始翻译: ${options.sourceLanguage} -> ${options.targetLanguage} [${type}]`);
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
         // 构建提示词
+        const promptTemplate = this.getPromptTemplate(type);
         const messages = createTranslateMessages(
-          this.config.promptTemplate,
+          promptTemplate,
           options.sourceLanguage,
           options.targetLanguage,
           text
