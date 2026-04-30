@@ -63,10 +63,10 @@ export const translationConfig: TranslationConfig = {
       fullName: 'english',
       shortName: 'en',
     },
-    {
-      fullName: 'japanese',
-      shortName: 'ja',
-    },
+    // {
+      // fullName: 'japanese',
+      // shortName: 'ja',
+    // },
   ],
   // 需要翻译的 front-matter 字段
   frontMatter: [
@@ -249,35 +249,54 @@ export const appConfig: AppConfig = {
 };
 
 /**
- * 根据系统提示词和内容智能计算 maxTokens 和 timeout
- * @param _systemPrompt 系统提示词
- * @param content 待翻译内容
- * @returns 智能计算的 maxTokens 和 timeout
+ * 根据系统提示词 + 内容，智能计算 maxTokens 和 timeout
+ *
+ * @param systemPrompt   - 系统提示词
+ * @param content        - 待处理内容
+ * @param modelContextWindow - 模型上下文窗口总长度（默认 128000，适配 DeepSeek 等推理模型）
+ * @param apiMaxTokens
+ * @returns { maxTokens: number; timeout: number }
  */
 export function calculateSmartTokens(
-  _systemPrompt: string,
-  content: string
+  systemPrompt: string,
+  content: string,
+  modelContextWindow: number = 128000,
+  apiMaxTokens: number = 120000
 ): { maxTokens: number; timeout: number } {
-  const contentTokens = Math.ceil(content.length / 4);
-  let maxTokens = Math.max(1000, Math.ceil(contentTokens * 1.2));
-  const baseTokens = openaiConfig.maxTokens;
-  if (maxTokens < baseTokens) {
-    maxTokens = baseTokens;
-  } else if (maxTokens > baseTokens * 3) {
-    maxTokens = baseTokens * 3;
+  // 1. 精确估算输入总 token 数（中文 2.5 token/字，英文 1.3 token/词）
+  const inputText = systemPrompt + content;
+  const inputTokens = estimateTokenCount(inputText);
+
+  // 2. 计算翻译任务所需的输出 token 数
+  //    中 → 英 通常输出 token 数 ≤ 输入 token 数，为安全取 1.2 倍
+  const requiredOutput = Math.ceil(inputTokens * 1.2);
+
+  // 3. 同时受模型上下文窗口和 API 本身 max_tokens 参数的双重限制
+  const availableByContext = modelContextWindow - inputTokens - 100; // 留 100 安全边
+  let maxTokens = Math.min(requiredOutput, availableByContext, apiMaxTokens);
+
+  // 4. 保底至少 1000 token
+  if (maxTokens < 1000) {
+    maxTokens = 1000
   }
 
-  let timeout = 1000 * 60;
-  if (contentTokens > 500) {
-    timeout = Math.ceil((contentTokens / 500) * 1000 * 60);
-  }
-  if (timeout < openaiConfig.timeout) {
-    timeout = openaiConfig.timeout;
-  } else if (timeout > openaiConfig.timeout * 3) {
-    timeout = openaiConfig.timeout * 3;
-  }
+  // 5. timeout：基础 30 秒，每 1000 输入 token 增加 30 秒，最长 10 分钟，保底一分钟
+  const timeout = Math.max(Math.min(
+    30_000 + Math.ceil(inputTokens / 1000) * 30_000,
+    600_000
+  ),60_000);
 
   return { maxTokens, timeout };
+}
+
+/** 启发式 token 估算（已针对中文优化） */
+function estimateTokenCount(text: string): number {
+  if (!text) return 0;
+  const chineseChars = (text.match(/[\u4e00-\u9fff\u3400-\u4dbf]/g) || []).length;
+  const textNoChinese = text.replace(/[\u4e00-\u9fff\u3400-\u4dbf]/g, ' ');
+  const englishWords = textNoChinese.split(/\s+/).filter(Boolean).length;
+  const otherChars = textNoChinese.replace(/[a-zA-Z0-9]/g, '').replace(/\s/g, '').length;
+  return Math.ceil(chineseChars * 2 + englishWords * 1.3 + otherChars);
 }
 
 export default appConfig;
