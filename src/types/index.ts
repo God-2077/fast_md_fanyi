@@ -77,7 +77,12 @@ export interface OpenAIConfig {
   temperature: number;
   maxTokens: number;
   stream: boolean;
-  promptTemplate: string;
+  /** @deprecated 使用 markdownPromptTemplate 和 textPromptTemplate 替代 */
+  promptTemplate?: string;
+  /** Markdown 内容翻译的提示词模板 */
+  markdownPromptTemplate?: string;
+  /** 纯文本翻译的提示词模板 */
+  textPromptTemplate?: string;
   timeout: number;
   threadCount: number;
   retryCount: number;
