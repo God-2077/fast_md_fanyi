@@ -6,7 +6,7 @@
 import { glob } from 'glob';
 import path from 'path';
 import fs from 'fs/promises';
-import fm from 'front-matter';
+import yaml from 'js-yaml';
 import crypto from 'crypto';
 import pLimit from 'p-limit';
 
@@ -326,6 +326,23 @@ async function main(): Promise<void> {
 }
 
 /**
+ * 解析 Markdown 文件的 YAML front-matter，使用 JSON_SCHEMA 避免将日期字符串转为 Date 对象
+ */
+function parseFrontMatter(content: string): { attributes: Record<string, unknown>; body: string } {
+  const match = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+  if (!match) {
+    return { attributes: {}, body: content };
+  }
+
+  const yamlStr = match[1];
+  const body = match[2];
+
+  const attributes = (yaml.load(yamlStr, { schema: yaml.JSON_SCHEMA }) as Record<string, unknown>) || {};
+
+  return { attributes, body };
+}
+
+/**
  * 处理单个 Markdown 文件
  */
 function shouldSkipTranslation(
@@ -394,7 +411,7 @@ async function processMarkdownFile(
   if (fileConfig.skipUnchanged) {
     try {
       const existingContent = await fs.readFile(outputPath, 'utf-8');
-      const parsed = fm<Record<string, unknown>>(existingContent);
+      const parsed = parseFrontMatter(existingContent);
       const existingMeta = parsed.attributes.translationMeta as TranslationMeta | undefined;
 
       if (existingMeta?.sourceHash === contentHash) {
@@ -406,7 +423,7 @@ async function processMarkdownFile(
     }
   }
 
-  const parsedContent = fm<Record<string, unknown>>(markdownContent);
+  const parsedContent = parseFrontMatter(markdownContent);
   const rawFrontMatter = parsedContent.attributes || {};
   const rawMarkdownBody = parsedContent.body || '';
 
