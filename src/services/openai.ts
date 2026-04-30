@@ -21,12 +21,15 @@ async function fetchOpenAIData(config: FetchOpenAIConfig): Promise<ResponseData>
     timeout,
     messages,
     checkMangledCode,
+    taskId,
   } = config;
+
+  const log = taskId ? logger.child(taskId) : logger;
 
   if (openaiConfig.mock) {
     const mockDelay = openaiConfig.mockDelay || Math.floor(Math.random() * 1500) + 500;
     await new Promise(r => setTimeout(r, mockDelay));
-    logger.info(`[Mock 模式] 模拟耗时 ${mockDelay}ms，模拟 OpenAI API 响应`);
+    log.info(`[Mock 模式] 模拟耗时 ${mockDelay}ms，模拟 OpenAI API 响应`);
     const content = messages[messages.length - 1]?.content;
     const text = typeof content === 'string' ? content : Array.isArray(content) ? content.map(c => c.text).join('') : '';
     return {
@@ -68,9 +71,9 @@ async function fetchOpenAIData(config: FetchOpenAIConfig): Promise<ResponseData>
     max_tokens: maxTokens ?? 2048,
   };
 
-  logger.debug(`OpenAI API 请求体: ${JSON.stringify(requestBody)}`);
+  log.debug(`OpenAI API 请求体: ${JSON.stringify(requestBody)}`);
 
-  logger.debug(`发送 OpenAI API 请求到 ${baseURL}/chat/completions`);
+  log.debug(`发送 OpenAI API 请求到 ${baseURL}/chat/completions`);
 
   if (stream) {
     requestBody.stream = true;

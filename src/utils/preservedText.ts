@@ -14,19 +14,10 @@ const PTX_PREFIX = '<PTX_';
 const TERM_PREFIX = '<TERM_';
 const PLACEHOLDER_SUFFIX = '>';
 
-/**
- * 生成简短的唯一ID（用于字段占位符）
- */
-let idCounter = 0;
-
-export function resetIdCounter(): void {
-  idCounter = 0;
-}
-
-function generateShortId(): string {
+function generateShortId(counter: { value: number }): string {
   const random = Math.random().toString(36).substring(2, 6);
-  idCounter++;
-  return `${idCounter}_${random}`;
+  counter.value++;
+  return `${counter.value}_${random}`;
 }
 
 /**
@@ -74,7 +65,8 @@ export function preservedHandle(
 ): PreservedHandleResult {
   const dictionary = new Map<string, string>();
   const usedPlaceholders = new Set<string>();
-  
+  const idCounter = { value: 0 };
+
   if (preservedTerms.length === 0 && preservedFields.length === 0) {
     return { text, dictionary };
   }
@@ -208,10 +200,10 @@ export function preservedHandle(
           counter++;
         }
       } else {
-        let id = generateShortId();
+        let id = generateShortId(idCounter);
         placeholder = createFieldPlaceholder(id);
         while (usedPlaceholders.has(placeholder)) {
-          id = generateShortId();
+          id = generateShortId(idCounter);
           placeholder = createFieldPlaceholder(id);
         }
       }

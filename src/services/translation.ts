@@ -11,7 +11,7 @@ import type {
   TranslateResult
 } from '../types';
 import { Logger } from '../utils/logger';
-import { preservedHandle, restoreText, resetIdCounter } from '../utils/preservedText';
+import { preservedHandle, restoreText } from '../utils/preservedText';
 import { splitMarkdownIntoChunks } from '../utils/textChunker';
 import { createTranslateMessages } from '../utils/prompt';
 import { fetchOpenAIData } from '../services/openai';
@@ -56,11 +56,12 @@ export class TranslationService {
   async translateMarkdown(
     text: string,
     sourceLanguage: string,
-    targetLanguage: string
+    targetLanguage: string,
+    taskId?: string
   ): Promise<{ translatedText: string; usage?: { totalTokens: number } }> {
     const maxCharLength = this.translationConfig.maxCharLength;
     if (maxCharLength && text.length > maxCharLength) {
-      return this.translateMarkdownChunked(text, sourceLanguage, targetLanguage, maxCharLength);
+      return this.translateMarkdownChunked(text, sourceLanguage, targetLanguage, maxCharLength, taskId);
     }
 
     const options: TranslateOptions = {
@@ -75,7 +76,8 @@ export class TranslationService {
       this.translationConfig.preservedTerms,
       this.translationConfig.preservedFields,
       this.translationConfig.preservedTermsUseFieldPlaceholder,
-      'markdown'
+      'markdown',
+      taskId
     );
 
     if (!result.success) {
@@ -95,10 +97,12 @@ export class TranslationService {
     text: string,
     sourceLanguage: string,
     targetLanguage: string,
-    maxCharLength: number
+    maxCharLength: number,
+    taskId?: string
   ): Promise<{ translatedText: string; usage?: { totalTokens: number } }> {
     const chunks = splitMarkdownIntoChunks(text, maxCharLength);
-    this.logger.info(`内容长度 ${text.length} 超过限制 ${maxCharLength}，分割为 ${chunks.length} 个块`);
+    const log = taskId ? this.logger.child(taskId) : this.logger;
+    log.info(`内容长度 ${text.length} 超过限制 ${maxCharLength}，分割为 ${chunks.length} 个块`);
 
     const options: TranslateOptions = {
       sourceLanguage,
@@ -110,7 +114,7 @@ export class TranslationService {
     let totalTokens = 0;
 
     for (let i = 0; i < chunks.length; i++) {
-      this.logger.debug(`翻译第 ${i + 1}/${chunks.length} 个块 (${chunks[i].length} 字符)`);
+      log.debug(`翻译第 ${i + 1}/${chunks.length} 个块 (${chunks[i].length} 字符)`);
 
       const result = await this.executeTranslation(
         chunks[i],
@@ -118,7 +122,8 @@ export class TranslationService {
         this.translationConfig.preservedTerms,
         this.translationConfig.preservedFields,
         this.translationConfig.preservedTermsUseFieldPlaceholder,
-        'markdown'
+        'markdown',
+        taskId
       );
 
       if (!result.success) {
@@ -131,7 +136,7 @@ export class TranslationService {
       }
     }
 
-    this.logger.info(`分块翻译完成，共 ${chunks.length} 个块`);
+    log.info(`分块翻译完成，共 ${chunks.length} 个块`);
 
     return {
       translatedText: translatedChunks.join('\n\n'),
@@ -145,7 +150,8 @@ export class TranslationService {
   async translateText(
     text: string,
     sourceLanguage: string,
-    targetLanguage: string
+    targetLanguage: string,
+    taskId?: string
   ): Promise<{ translatedText: string; usage?: { totalTokens: number } }> {
     const options: TranslateOptions = {
       sourceLanguage,
@@ -159,7 +165,8 @@ export class TranslationService {
       this.translationConfig.preservedTerms,
       [],
       this.translationConfig.preservedTermsUseFieldPlaceholder,
-      'text'
+      'text',
+      taskId
     );
 
     if (!result.success) {
@@ -178,10 +185,11 @@ export class TranslationService {
   async translateBatch(
     texts: string[],
     sourceLanguage: string,
-    targetLanguage: string
+    targetLanguage: string,
+    taskId?: string
   ): Promise<{ translations: string[]; usage?: { totalTokens: number } }> {
     const results = await Promise.all(
-      texts.map(text => this.translateText(text, sourceLanguage, targetLanguage))
+      texts.map(text => this.translateText(text, sourceLanguage, targetLanguage, taskId))
     );
     
     const translations = results.map(r => r.translatedText);
@@ -216,12 +224,14 @@ export class TranslationService {
     preservedTerms: RegExp[],
     preservedFields: RegExp[],
     preservedTermsUseFieldPlaceholder = false,
-    type: 'markdown' | 'text' = 'markdown'
+    type: 'markdown' | 'text' = 'markdown',
+    taskId?: string
   ): Promise<TranslateResult> {
     const maxRetries = options.retryCount || 3;
     let lastError: string = '';
+    const log = taskId ? this.logger.child(taskId) : this.logger;
 
-    this.logger.info(`开始翻译: ${options.sourceLanguage} -> ${options.targetLanguage} [${type}]`);
+    log.info(`开始翻译: ${options.sourceLanguage} -> ${options.targetLanguage} [${type}]`);
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
@@ -233,8 +243,6 @@ export class TranslationService {
           options.targetLanguage,
           text
         );
-
-        resetIdCounter();
 
         const systemPrompt = (messages[0] as { content: string }).content || '';
         
@@ -264,10 +272,11 @@ export class TranslationService {
           model: this.config.model,
           temperature: this.config.temperature,
           maxTokens,
-          stream: false,
+          stream: this.config.stream,
           timeout,
           messages,
           checkMangledCode: this.config.checkMangledCode,
+          taskId,
         };
 
         const response = await fetchOpenAIData(apiConfig);
@@ -277,9 +286,9 @@ export class TranslationService {
           const restoredText = restoreText(response.content, dictionary);
           // 去除前后空格
           const trimmedText = restoredText.trim();
-          this.logger.info(`翻译成功 (${attempt + 1} 次尝试)`);
-          this.logger.debug(`Translation successful after ${attempt + 1} attempt(s)`);
-          
+          log.info(`翻译成功 (${attempt + 1} 次尝试)`);
+          log.debug(`Translation successful after ${attempt + 1} attempt(s)`);
+
           return {
             success: true,
             translatedText: trimmedText,
@@ -289,30 +298,30 @@ export class TranslationService {
 
         lastError = response.error;
         const isFatalError = response.errorClassification === 'fatal';
-        this.logger.warn(`翻译尝试 ${attempt + 1} 失败: ${lastError} [${response.errorClassification}]`);
+        log.warn(`翻译尝试 ${attempt + 1} 失败: ${lastError} [${response.errorClassification}]`);
 
         if (isFatalError) {
-          this.logger.error(`收到致命错误，终止翻译: ${lastError}`);
+          log.error(`收到致命错误，终止翻译: ${lastError}`);
           throw new TranslationServiceError(lastError, true);
         }
 
         const isRateLimited = response.status === 429;
         const waitTime = isRateLimited ? this.config.rateLimitWait : 1000;
-        
+
         if (attempt < maxRetries - 1) {
           if (isRateLimited) {
-            this.logger.info(`速率限制 (429)，等待 ${waitTime / 1000} 秒后重试...`);
+            log.info(`速率限制 (429)，等待 ${waitTime / 1000} 秒后重试...`);
           }
           await this.delay(waitTime);
         }
 
       } catch (error) {
         lastError = error instanceof Error ? error.message : String(error);
-        this.logger.warn(`翻译尝试 ${attempt + 1} 错误: ${lastError}`);
+        log.warn(`翻译尝试 ${attempt + 1} 错误: ${lastError}`);
       }
     }
 
-    this.logger.error(`翻译失败，已达到最大重试次数 ${maxRetries}`);
+    log.error(`翻译失败，已达到最大重试次数 ${maxRetries}`);
     return {
       success: false,
       error: `Translation failed after ${maxRetries} attempts. Last error: ${lastError}`,

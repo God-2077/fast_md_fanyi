@@ -19,6 +19,7 @@ export default [
         setTimeout: 'readonly',
         clearTimeout: 'readonly',
         AbortController: 'readonly',
+        AbortSignal: 'readonly',
         Buffer: 'readonly',
         NodeJS: 'readonly',
       },
