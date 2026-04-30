@@ -8,6 +8,7 @@ import path from 'path';
 import fs from 'fs/promises';
 import fm from 'front-matter';
 import crypto from 'crypto';
+import pLimit from 'p-limit';
 
 import { Logger } from './utils/logger';
 import { translationConfig, openaiConfig, fileConfig, logLevelConfig, reportConfig } from './config';
@@ -16,6 +17,17 @@ import { TranslationService, TranslationServiceError } from './services/translat
 import type { ProcessedFrontMatter, TranslationMeta, HeaderFooterSingleConfig, FileReportEntry, ReportSummary } from './types';
 
 const logger = new Logger(logLevelConfig, 'main');
+
+interface FileTaskOutput {
+  aborted: boolean;
+  skipped: boolean;
+  skipReason?: string;
+  outputPath: string;
+  sourceHash?: string;
+  usage?: { totalTokens: number };
+  elapsedMs: number;
+  report: FileReportEntry;
+}
 
 /**
  * 格式化页眉页脚，替换占位符
@@ -84,7 +96,6 @@ async function main(): Promise<void> {
   let totalFilesSkipped = 0;
   let totalCopiedFiles = 0;
   let totalTokensUsed = 0;
-  let consecutiveErrors = 0;
   const maxConsecutiveErrors = openaiConfig.maxConsecutiveErrors;
   const maxRetriesBehavior = openaiConfig.maxRetriesBehavior;
   const startTime = Date.now();
@@ -96,14 +107,40 @@ async function main(): Promise<void> {
 
     targetLogger.info(`开始处理目标语言: ${target.fullName} (${targetLang})`);
 
-    for (let index = 0; index < markdownFiles.length; index++) {
-      const markdownFile = markdownFiles[index];
-      targetLogger.info(`翻译文件 [${index + 1}/${markdownFiles.length}]: ${path.basename(markdownFile)}`);
+    const controller = new AbortController();
+    const { signal } = controller;
+    const limit = pLimit(openaiConfig.threadCount);
 
+    const consecutiveErrorCount = { value: 0 };
+
+    const processFileTask = async (filePath: string, index: number): Promise<FileTaskOutput> => {
+      const taskId = String(index + 1);
+      const taskLogger = targetLogger.child(taskId);
+
+      if (signal.aborted) {
+        return {
+          aborted: true,
+          skipped: false,
+          outputPath: '',
+          elapsedMs: 0,
+          report: {
+            sourceFile: filePath,
+            outputFile: '',
+            targetLang,
+            success: false,
+            skipped: false,
+            failureReason: '任务已取消',
+            elapsedMs: 0,
+          },
+        };
+      }
+
+      taskLogger.info(`翻译文件 [${index + 1}/${markdownFiles.length}]: ${path.basename(filePath)}`);
       const fileStartTime = Date.now();
+
       try {
         const result = await processMarkdownFile(
-          markdownFile,
+          filePath,
           inputFolder,
           outputBaseFolder,
           sourceLang,
@@ -111,90 +148,143 @@ async function main(): Promise<void> {
           targetLangFullName,
           source.shortName,
           translationService,
-          targetLogger
+          taskLogger,
+          signal,
+          taskId
         );
 
         const fileElapsed = Date.now() - fileStartTime;
+        consecutiveErrorCount.value = 0;
 
-        if (result.skipped) {
-          totalFilesSkipped++;
-          consecutiveErrors = 0;
-          if (result.outputPath) {
-            outputFilesRecord.add(result.outputPath);
-          }
-          fileReports.push({
-            sourceFile: markdownFile,
-            outputFile: result.outputPath,
-            targetLang,
-            success: true,
-            skipped: true,
-            skipReason: result.skipReason,
-            sourceHash: result.sourceHash,
-            tokensUsed: result.usage?.totalTokens || 0,
-            elapsedMs: fileElapsed,
-          });
-        } else {
-          outputFilesRecord.add(result.outputPath);
-          totalFilesTranslated++;
-          consecutiveErrors = 0;
-          if (result.usage) {
-            totalTokensUsed += result.usage.totalTokens;
-          }
-          fileReports.push({
-            sourceFile: markdownFile,
-            outputFile: result.outputPath,
-            targetLang,
-            success: true,
-            skipped: false,
-            sourceHash: result.sourceHash,
-            tokensUsed: result.usage?.totalTokens || 0,
-            elapsedMs: fileElapsed,
-          });
-        }
+        const report: FileReportEntry = {
+          sourceFile: filePath,
+          outputFile: result.outputPath,
+          targetLang,
+          success: true,
+          skipped: result.skipped,
+          skipReason: result.skipReason,
+          sourceHash: result.sourceHash,
+          tokensUsed: result.usage?.totalTokens || 0,
+          elapsedMs: fileElapsed,
+        };
 
         if (result.usage) {
-          targetLogger.info(
+          taskLogger.info(
             `耗时: ${(fileElapsed / 1000).toFixed(2)}s, Tokens: ${result.usage.totalTokens}`
           );
         } else if (result.skipped) {
-          targetLogger.info(`跳过 (原文未变更), 耗时: ${(fileElapsed / 1000).toFixed(2)}s`);
+          taskLogger.info(`跳过 (原文未变更), 耗时: ${(fileElapsed / 1000).toFixed(2)}s`);
         }
+
+        return {
+          aborted: false,
+          skipped: result.skipped,
+          skipReason: result.skipReason,
+          outputPath: result.outputPath,
+          sourceHash: result.sourceHash,
+          usage: result.usage,
+          elapsedMs: fileElapsed,
+          report,
+        };
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
         const isFatal = error instanceof TranslationServiceError && error.fatal;
-
         const fileElapsed = Date.now() - fileStartTime;
-        fileReports.push({
-          sourceFile: markdownFile,
+
+        const report: FileReportEntry = {
+          sourceFile: filePath,
           outputFile: '',
           targetLang,
           success: false,
           skipped: false,
           failureReason: errorMsg,
           elapsedMs: fileElapsed,
-        });
+        };
 
         if (isFatal) {
-          targetLogger.error(`致命错误，程序终止: ${errorMsg}`);
-          process.exit(1);
+          taskLogger.error(`致命错误，广播停止信号: ${errorMsg}`);
+          controller.abort();
+          return { aborted: true, skipped: false, outputPath: '', elapsedMs: fileElapsed, report };
         }
 
-        consecutiveErrors++;
-        targetLogger.error(`处理文件时发生错误: ${markdownFile}, 错误: ${errorMsg}, 连续错误: ${consecutiveErrors}/${maxConsecutiveErrors}`);
+        consecutiveErrorCount.value++;
+        taskLogger.error(
+          `处理文件时发生错误: ${filePath}, 错误: ${errorMsg}, 连续错误: ${consecutiveErrorCount.value}/${maxConsecutiveErrors}`
+        );
 
-        if (consecutiveErrors >= maxConsecutiveErrors) {
-          logger.error(`连续错误达到上限 ${maxConsecutiveErrors}，程序退出`);
-          process.exit(1);
+        if (consecutiveErrorCount.value >= maxConsecutiveErrors) {
+          logger.error(`连续错误达到上限 ${maxConsecutiveErrors}，广播停止信号`);
+          controller.abort();
+          return { aborted: true, skipped: false, outputPath: '', elapsedMs: fileElapsed, report };
         }
 
         if (maxRetriesBehavior === 'exit') {
-          logger.error(`达到最大重试次数，配置为退出程序`);
-          process.exit(1);
+          logger.error('达到最大重试次数，配置为退出程序');
+          controller.abort();
+          return { aborted: true, skipped: false, outputPath: '', elapsedMs: fileElapsed, report };
         }
 
-        targetLogger.info(`跳过该文件，继续下一个`);
+        taskLogger.info('跳过该文件，继续下一个');
+        return {
+          aborted: false,
+          skipped: false,
+          outputPath: '',
+          elapsedMs: fileElapsed,
+          report,
+        };
+      }
+    };
+
+    const tasks = markdownFiles.map((file, idx) =>
+      limit(() => processFileTask(file, idx))
+    );
+
+    const allSettledPromise = Promise.allSettled(tasks);
+    const abortPromise = new Promise<never>((_, reject) => {
+      signal.addEventListener('abort', () => {
+        reject(new Error('任务因致命错误而中止'));
+      });
+    });
+
+    let fileResults: PromiseSettledResult<FileTaskOutput>[];
+
+    try {
+      fileResults = await Promise.race([
+        allSettledPromise,
+        abortPromise,
+      ]);
+    } catch {
+      logger.error('因致命错误，任务已中止');
+      process.exit(1);
+    }
+
+    for (const settled of fileResults) {
+      if (settled.status === 'rejected') {
         continue;
       }
+      const data = settled.value;
+      fileReports.push(data.report);
+
+      if (data.skipped) {
+        totalFilesSkipped++;
+        if (data.outputPath) {
+          outputFilesRecord.add(data.outputPath);
+        }
+      } else if (data.aborted) {
+        // Aborted tasks are already reported
+      } else if (data.outputPath) {
+        outputFilesRecord.add(data.outputPath);
+        totalFilesTranslated++;
+        if (data.usage) {
+          totalTokensUsed += data.usage.totalTokens;
+        }
+      }
+      // Failed files remain in report only
+    }
+
+    if (signal.aborted) {
+      logger.error('因致命错误，任务已中止');
+      process.exit(1);
     }
 
     targetLogger.info(`目标语言 ${target.fullName} (${targetLang}) 处理完成`);
@@ -280,8 +370,14 @@ async function processMarkdownFile(
   targetLanguage: string,
   sourceShortName: string,
   translationService: TranslationService,
-  fileLogger: Logger
+  fileLogger: Logger,
+  signal?: AbortSignal,
+  taskId?: string
 ): Promise<{ outputPath: string; skipped: boolean; usage?: { totalTokens: number }; sourceHash: string; skipReason?: string }> {
+  if (signal?.aborted) {
+    throw new Error('Translation cancelled');
+  }
+
   let markdownContent = await fs.readFile(filePath, 'utf-8');
   markdownContent = markdownContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
@@ -324,7 +420,8 @@ async function processMarkdownFile(
     sourceLang,
     targetLanguage,
     translationService,
-    fileLogger
+    fileLogger,
+    taskId
   );
 
   let translatedBody = rawMarkdownBody;
@@ -333,7 +430,8 @@ async function processMarkdownFile(
     const bodyResult = await translationService.translateMarkdown(
       rawMarkdownBody,
       sourceLang,
-      targetLanguage
+      targetLanguage,
+      taskId
     );
     translatedBody = bodyResult.translatedText;
     bodyUsage = bodyResult.usage;
@@ -390,7 +488,8 @@ async function translateFrontMatter(
   sourceLang: string,
   targetLanguage: string,
   translationService: TranslationService,
-  fileLogger: Logger
+  fileLogger: Logger,
+  taskId?: string
 ): Promise<{ frontMatter: ProcessedFrontMatter; usage?: { totalTokens: number } }> {
   const processed: ProcessedFrontMatter = { ...frontMatter };
   let totalUsage = 0;
@@ -408,7 +507,8 @@ async function translateFrontMatter(
         const result = await translationService.translateText(
           originalValue,
           sourceLang,
-          targetLanguage
+          targetLanguage,
+          taskId
         );
         processed[field] = result.translatedText;
         if (result.usage) totalUsage += result.usage.totalTokens;
@@ -416,7 +516,8 @@ async function translateFrontMatter(
         const result = await translationService.translateBatch(
           originalValue.filter((item): item is string => typeof item === 'string'),
           sourceLang,
-          targetLanguage
+          targetLanguage,
+          taskId
         );
         processed[field] = result.translations;
         if (result.usage) totalUsage += result.usage.totalTokens;

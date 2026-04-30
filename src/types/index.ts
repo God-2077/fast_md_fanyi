@@ -192,6 +192,7 @@ export interface FetchOpenAIConfig {
   timeout: number;
   messages: Message[];
   checkMangledCode?: boolean;
+  taskId?: string;
 }
 
 /**
