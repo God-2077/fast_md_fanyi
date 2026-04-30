@@ -189,16 +189,8 @@ export const openaiConfig: OpenAIConfig = {
  */
 export const fileConfig: FileConfig = {
   inputFolder: 'input',
-  ignore: [
-    'node_modules',
-    'dist',
-    'output',
-    '.git',
-    '.DS_Store',
-  ],
+  ignore: ['node_modules', 'dist', 'output', '.git', '.DS_Store'],
   outputFolder: 'output',
-  fileName: '{name}_{targetShortName}.{ext}',
-  filePath: '{targetShortName}/{filePath}.{ext}',
   preserveFolders: true,
   copyOtherFiles: true,
   skipUnchanged: true,

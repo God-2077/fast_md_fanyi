@@ -19,6 +19,10 @@ const PLACEHOLDER_SUFFIX = '>';
  */
 let idCounter = 0;
 
+export function resetIdCounter(): void {
+  idCounter = 0;
+}
+
 function generateShortId(): string {
   const random = Math.random().toString(36).substring(2, 6);
   idCounter++;

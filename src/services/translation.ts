@@ -11,11 +11,11 @@ import type {
   TranslateResult
 } from '../types';
 import { Logger } from '../utils/logger';
-import { preservedHandle, restoreText } from '../utils/preservedText';
+import { preservedHandle, restoreText, resetIdCounter } from '../utils/preservedText';
 import { splitMarkdownIntoChunks } from '../utils/textChunker';
 import { createTranslateMessages } from '../utils/prompt';
 import { fetchOpenAIData } from '../services/openai';
-import { logLevelConfig } from '../config';
+import { logLevelConfig, calculateSmartTokens } from '../config';
 
 /**
  * 翻译服务错误
@@ -234,7 +234,18 @@ export class TranslationService {
           text
         );
 
-        // 预处理：保留特殊内容
+        resetIdCounter();
+
+        const systemPrompt = (messages[0] as { content: string }).content || '';
+        
+        let maxTokens = this.config.maxTokens;
+        let timeout = this.config.timeout;
+        if (this.config.smartTokens || this.config.smartTimeout) {
+          const smartResult = calculateSmartTokens(systemPrompt, text);
+          if (this.config.smartTokens) maxTokens = smartResult.maxTokens;
+          if (this.config.smartTimeout) timeout = smartResult.timeout;
+        }
+
         const { text: processedText, dictionary } = preservedHandle(
           text,
           preservedTerms,
@@ -242,21 +253,19 @@ export class TranslationService {
           preservedTermsUseFieldPlaceholder
         );
 
-        // 更新消息内容
         messages[1] = {
           role: 'user',
           content: processedText,
         };
 
-        // 发送请求
         const apiConfig: FetchOpenAIConfig = {
           apiKey: this.config.apiKey,
           baseURL: this.config.baseURL,
           model: this.config.model,
           temperature: this.config.temperature,
-          maxTokens: this.config.maxTokens,
+          maxTokens,
           stream: false,
-          timeout: this.config.timeout,
+          timeout,
           messages,
           checkMangledCode: this.config.checkMangledCode,
         };
