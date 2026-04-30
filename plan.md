@@ -133,7 +133,7 @@
 
 ## 22. 修改原有 openai 提示词配置
 
-- [ ] 完成
+- [x] 完成
 
 修改原有 openai 提示词配置，翻译 Markdown 内容(translateMarkdown)、翻译纯文本(translateText) 选用不同的 ai 提示词
 
@@ -148,3 +148,42 @@
 - [ ] 完成
 
 完成多线程翻译支持，并配置对应的错误处理机制
+
+## 25. 实现 Logger 单例，避免多实例文件冲突。
+
+- [ ] 完成
+
+· Logger 类每次构造都调用 createPino()，会创建多个独立的 pino 实例，每个实例可能打开独立的文件写入流。
+· 多个 logger 同时写入同一日志文件可能导致内容交错、文件句柄泄漏。
+· 建议：将 pino 根 logger 设计为单例，子 logger 通过 .child() 派生，避免重复创建 transport。可参考 ：/src/test/test-pino-pretty.js
+
+## 26. 移除使用的配置项
+
+- [ ] 完成
+
+· fileConfig.fileName 和 fileConfig.filePath 被定义但从未使用，实际输出路径由 processMarkdownFile 中的 path.join(outputBaseFolder, targetLang, relativePath) 固定生成。
+· 建议：删除未使用配置
+
+## 27. 修复潜在的内存泄漏
+
+- [ ] 完成
+
+· preservedText.ts 中的 idCounter 和 generateShortId 在多次调用持续增长，虽然上限可控，但无重置机制。
+· 影响：长期运行或翻译极大量文件时，占位符 ID 会无限增大，字典也会膨胀。
+· 建议：考虑每次翻译任务重置 ID 计数器
+
+## 28. API 请求未使用智能 Token 计算
+
+- [ ] 完成
+
+· calculateSmartTokens 已定义但未被调用。实际请求仍使用固定的 openaiConfig.maxTokens（1000）。
+· 长文档翻译时可能因 max_tokens 不足导致截断。
+· 建议：在 executeTranslation 中调用 calculateSmartTokens 并动态设置 maxTokens 和 timeout。
+
+## 29. 流式响应处理中未收集 usage
+
+- [ ] 完成
+
+· handleStreamRequest 不解析最后的 usage 信息（OpenAI 流式响应的末尾通常有一个包含 usage 的数据块）。当前只返回 usage: undefined。
+· 影响：无法统计 token 消耗。
+· 建议：在收到 [DONE] 前最后的数据块中提取 usage 字段。
