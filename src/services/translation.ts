@@ -229,13 +229,13 @@ export class TranslationService {
   ): Promise<TranslateResult> {
     const maxRetries = options.retryCount || 3;
     let lastError: string = '';
+    const allErrors: string[] = [];
     const log = taskId ? this.logger.child(taskId) : this.logger;
 
     log.info(`开始翻译: ${options.sourceLanguage} -> ${options.targetLanguage} [${type}]`);
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
-        // 构建提示词
         const promptTemplate = this.getPromptTemplate(type);
         const messages = createTranslateMessages(
           promptTemplate,
@@ -282,9 +282,7 @@ export class TranslationService {
         const response = await fetchOpenAIData(apiConfig);
 
         if (response.success) {
-          // 还原特殊内容
           const restoredText = restoreText(response.content, dictionary);
-          // 去除前后空格
           const trimmedText = restoredText.trim();
           log.info(`翻译成功 (${attempt + 1} 次尝试)`);
           log.debug(`Translation successful after ${attempt + 1} attempt(s)`);
@@ -297,6 +295,7 @@ export class TranslationService {
         }
 
         lastError = response.error;
+        allErrors.push(lastError);
         const isFatalError = response.errorClassification === 'fatal';
         log.warn(`翻译尝试 ${attempt + 1} 失败: ${lastError} [${response.errorClassification}]`);
 
@@ -316,16 +315,44 @@ export class TranslationService {
         }
 
       } catch (error) {
-        lastError = error instanceof Error ? error.message : String(error);
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        lastError = errorMsg;
+        allErrors.push(errorMsg);
         log.warn(`翻译尝试 ${attempt + 1} 错误: ${lastError}`);
+
+        if (error instanceof TranslationServiceError && error.fatal) {
+          throw error;
+        }
       }
     }
 
     log.error(`翻译失败，已达到最大重试次数 ${maxRetries}`);
+    const finalError = this.buildFinalError(allErrors, maxRetries);
     return {
       success: false,
-      error: `Translation failed after ${maxRetries} attempts. Last error: ${lastError}`,
+      error: finalError,
     };
+  }
+
+  private buildFinalError(errors: string[], maxRetries: number): string {
+    const firstReal = errors.find(e => {
+      const lower = e.toLowerCase();
+      return !lower.includes('cancel') && !lower.includes('abort') && !lower.includes('aborted') && !lower.includes('任务因致命');
+    });
+
+    if (firstReal) {
+      const abortCount = errors.filter(e => {
+        const lower = e.toLowerCase();
+        return lower.includes('cancel') || lower.includes('abort') || lower.includes('aborted') || lower.includes('任务因致命');
+      }).length;
+
+      if (abortCount > 0) {
+        return `Translation failed after ${maxRetries} attempts. Root cause: ${firstReal} [${abortCount} subsequent attempts were aborted]`;
+      }
+      return `Translation failed after ${maxRetries} attempts. Last error: ${firstReal}`;
+    }
+
+    return `Translation failed after ${maxRetries} attempts. Last error: ${errors[errors.length - 1] || 'unknown'}`;
   }
 }
 

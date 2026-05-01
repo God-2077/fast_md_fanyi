@@ -112,6 +112,7 @@ async function main(): Promise<void> {
     const limit = pLimit(openaiConfig.threadCount);
 
     const consecutiveErrorCount = { value: 0 };
+    let abortReason = '';
 
     const processFileTask = async (filePath: string, index: number): Promise<FileTaskOutput> => {
       const taskId = String(index + 1);
@@ -129,7 +130,7 @@ async function main(): Promise<void> {
             targetLang,
             success: false,
             skipped: false,
-            failureReason: '任务已取消',
+            failureReason: abortReason ? `任务已取消 (原因: ${abortReason})` : '任务已取消',
             elapsedMs: 0,
           },
         };
@@ -203,6 +204,7 @@ async function main(): Promise<void> {
 
         if (isFatal) {
           taskLogger.error(`致命错误，广播停止信号: ${errorMsg}`);
+          if (!abortReason) abortReason = errorMsg;
           controller.abort();
           return { aborted: true, skipped: false, outputPath: '', elapsedMs: fileElapsed, report };
         }
@@ -214,12 +216,14 @@ async function main(): Promise<void> {
 
         if (consecutiveErrorCount.value >= maxConsecutiveErrors) {
           logger.error(`连续错误达到上限 ${maxConsecutiveErrors}，广播停止信号`);
+          if (!abortReason) abortReason = `连续 ${maxConsecutiveErrors} 个文件处理失败`;
           controller.abort();
           return { aborted: true, skipped: false, outputPath: '', elapsedMs: fileElapsed, report };
         }
 
         if (maxRetriesBehavior === 'exit') {
           logger.error('达到最大重试次数，配置为退出程序');
+          if (!abortReason) abortReason = errorMsg;
           controller.abort();
           return { aborted: true, skipped: false, outputPath: '', elapsedMs: fileElapsed, report };
         }
@@ -242,7 +246,8 @@ async function main(): Promise<void> {
     const allSettledPromise = Promise.allSettled(tasks);
     const abortPromise = new Promise<never>((_, reject) => {
       signal.addEventListener('abort', () => {
-        reject(new Error('任务因致命错误而中止'));
+        const reason = abortReason ? `: ${abortReason}` : '';
+        reject(new Error(`任务因致命错误而中止${reason}`));
       });
     });
 
@@ -392,7 +397,7 @@ async function processMarkdownFile(
   taskId?: string
 ): Promise<{ outputPath: string; skipped: boolean; usage?: { totalTokens: number }; sourceHash: string; skipReason?: string }> {
   if (signal?.aborted) {
-    throw new Error('Translation cancelled');
+    throw new TranslationServiceError('Translation cancelled (another task already triggered abort)', true);
   }
 
   let markdownContent = await fs.readFile(filePath, 'utf-8');
