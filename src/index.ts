@@ -76,8 +76,10 @@ async function main(): Promise<void> {
   const outputBaseFolder = path.resolve(fileConfig.outputFolder);
 
   logger.info(`正在扫描输入文件夹: ${inputFolder}`);
-  const markdownFiles = await glob(`${inputFolder}/**/*.md`);
-
+  const markdownFiles = await glob(`**/*.md`,{
+    cwd: inputFolder,
+    ignore: fileConfig.ignore,
+  });
   if (markdownFiles.length === 0) {
     logger.warn('未找到任何 Markdown 文件，程序退出。');
     return;
