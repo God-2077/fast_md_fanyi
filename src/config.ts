@@ -251,7 +251,7 @@ export const openaiConfig: OpenAIConfig = {
  */
 export const fileConfig: FileConfig = {
   inputFolder: 'input',
-  ignore: ['node_modules', 'dist', 'output', '.git', '.DS_Store'],
+  ignore: ['node_modules', 'dist', 'output', '.git', '.DS_Store', 'translation-report-*.json', ...(translationConfig.targets.map(target => `${target.shortName}/**/*`))],
   outputFolder: 'output',
   preserveFolders: true,
   copyOtherFiles: true,
