@@ -1,6 +1,6 @@
 import path from 'path';
 import fs from 'fs/promises';
-import type { TranslationReport, FileReportEntry, ReportSummary } from '../types';
+import type { TranslationReport, FileReportEntry, ReportSummary, FailedFileEntry } from '../types';
 import { reportConfig } from '../config';
 import { getConfigSummary, formatLocalTime } from './config';
 import { Logger } from './logger';
@@ -16,14 +16,19 @@ export interface ReportData {
 
 export function createReportData(
   summary: ReportSummary,
-  files: FileReportEntry[]
+  files: FileReportEntry[],
+  errors?: FailedFileEntry[]
 ): TranslationReport {
-  return {
+  const report: TranslationReport = {
     config: getConfigSummary(),
     summary,
     files,
     generatedAt: new Date().toISOString(),
   };
+  if (errors && errors.length > 0) {
+    report.errors = errors;
+  }
+  return report;
 }
 
 export async function writeReport(report: TranslationReport): Promise<void> {

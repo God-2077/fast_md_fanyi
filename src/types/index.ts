@@ -147,6 +147,15 @@ export interface ReportSummary {
 }
 
 /**
+ * 翻译错误条目
+ */
+export interface FailedFileEntry {
+  sourceFile: string;
+  targetLang: string;
+  reason: string;
+}
+
+/**
  * 翻译报告
  */
 export interface TranslationReport {
@@ -154,6 +163,7 @@ export interface TranslationReport {
   summary: ReportSummary;
   files: FileReportEntry[];
   generatedAt: string;
+  errors?: FailedFileEntry[];
 }
 
 // ============== OpenAI API 相关类型 ==============

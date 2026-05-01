@@ -14,7 +14,7 @@ import { Logger } from './utils/logger';
 import { translationConfig, openaiConfig, fileConfig, logLevelConfig, reportConfig } from './config';
 import { formatLocalTime, validateConfig, getConfigSummary, cleanupOutputFolder, buildOutputContent, copyOtherFiles, createReportData, writeReport } from './utils';
 import { TranslationService, TranslationServiceError } from './services/translation';
-import type { ProcessedFrontMatter, TranslationMeta, HeaderFooterSingleConfig, FileReportEntry, ReportSummary } from './types';
+import type { ProcessedFrontMatter, TranslationMeta, HeaderFooterSingleConfig, FileReportEntry, ReportSummary, FailedFileEntry } from './types';
 
 const logger = new Logger(logLevelConfig, 'main');
 
@@ -313,19 +313,32 @@ async function main(): Promise<void> {
   );
   logger.info(`总耗时: ${(totalElapsed / 1000).toFixed(2)}s, 总Tokens: ${totalTokensUsed}`);
 
+  const failedFiles = fileReports.filter(f => !f.success && !f.skipped);
+  const errorEntries: FailedFileEntry[] = failedFiles.map(f => ({
+    sourceFile: f.sourceFile,
+    targetLang: f.targetLang,
+    reason: f.failureReason || '未知错误',
+  }));
+
+  if (errorEntries.length > 0) {
+    logger.error(`错误: ${errorEntries.length} 个文件翻译失败:`);
+    for (const e of errorEntries) {
+      logger.error(`  - ${e.sourceFile} (${e.reason})`);
+    }
+  }
+
   if (reportConfig.enabled) {
-    const totalFailed = fileReports.filter(f => !f.success).length;
     const summary: ReportSummary = {
       totalFiles: markdownFiles.length,
       totalTranslated: totalFilesTranslated,
       totalSkipped: totalFilesSkipped,
-      totalFailed,
+      totalFailed: errorEntries.length,
       totalCopiedFiles,
       totalElapsedMs: totalElapsed,
       totalTokens: totalTokensUsed,
       targetLanguages: targets.map(t => t.fullName),
     };
-    const report = createReportData(summary, fileReports);
+    const report = createReportData(summary, fileReports, errorEntries);
     await writeReport(report);
   }
 }
