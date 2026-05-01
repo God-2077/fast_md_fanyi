@@ -287,10 +287,22 @@ function classifyError(error: unknown): { classification: 'fatal' | 'retryable';
                JSON.stringify(errorData) ||
                error.message;
     } else if (error.request) {
-      message = 'No response received from server. Please check your network connection.';
-      status = 0;
+      const lowerMsg = error.message?.toLowerCase() || '';
+      if (lowerMsg.includes('cancel') || lowerMsg.includes('abort')) {
+        message = 'Request was cancelled (timeout or internal abort)';
+        status = 408;
+      } else {
+        message = 'No response received from server. Please check your network connection.';
+        status = 0;
+      }
     } else {
-      message = error.message;
+      const lowerMsg = error.message?.toLowerCase() || '';
+      if (lowerMsg.includes('cancel') || lowerMsg.includes('abort')) {
+        message = `Request was cancelled — ${error.message}`;
+        status = 408;
+      } else {
+        message = error.message;
+      }
     }
 
     if (status === 429) {
@@ -309,7 +321,11 @@ function classifyError(error: unknown): { classification: 'fatal' | 'retryable';
   }
 
   if (error instanceof Error) {
+    const lowerMsg = error.message?.toLowerCase() || '';
     message = error.message;
+    if (lowerMsg.includes('cancel') || lowerMsg.includes('abort')) {
+      return { classification: 'retryable', message: `Request was cancelled — ${message}`, status: 408 };
+    }
     if (message.includes('timeout') || message.includes('Timeout')) {
       return { classification: 'retryable', message, status: 408 };
     }
@@ -317,7 +333,6 @@ function classifyError(error: unknown): { classification: 'fatal' | 'retryable';
       return { classification: 'fatal', message, status: 0 };
     }
   }
-  // 未知错误，返回 fatal
   return { classification: 'fatal', message, status };
 }
 
