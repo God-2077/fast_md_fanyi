@@ -282,10 +282,12 @@ function classifyError(error: unknown): { classification: 'fatal' | 'retryable';
     if (error.response) {
       status = error.response.status;
       const errorData = error.response.data;
+      let dataStr = '';
+      try { dataStr = JSON.stringify(errorData); } catch { /* circular structure, ignore */ }
       message = errorData?.error?.message ||
-               errorData?.error?.type ||
-               JSON.stringify(errorData) ||
-               error.message;
+                errorData?.error?.type ||
+                dataStr ||
+                error.message;
     } else if (error.request) {
       const lowerMsg = error.message?.toLowerCase() || '';
       if (lowerMsg.includes('cancel') || lowerMsg.includes('abort')) {

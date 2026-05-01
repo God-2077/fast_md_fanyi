@@ -100,7 +100,25 @@ async function main(): Promise<void> {
   const maxRetriesBehavior = openaiConfig.maxRetriesBehavior;
   const startTime = Date.now();
 
+  let fatalAborted = false;
+  let currentController: AbortController | null = null;
+
+  const onSigint = () => {
+    if (fatalAborted) {
+      logger.error('收到第二次中断信号，强制退出');
+      process.exit(1);
+    }
+    logger.warn('收到中断信号，正在停止...');
+    fatalAborted = true;
+    if (currentController) {
+      currentController.abort();
+    }
+  };
+  process.on('SIGINT', onSigint);
+
   for (const target of targets) {
+    if (fatalAborted) break;
+
     const targetLang = target.shortName;
     const targetLangFullName = target.fullName;
     const targetLogger = logger.child(targetLang);
@@ -108,6 +126,7 @@ async function main(): Promise<void> {
     targetLogger.info(`开始处理目标语言: ${target.fullName} (${targetLang})`);
 
     const controller = new AbortController();
+    currentController = controller;
     const { signal } = controller;
     const limit = pLimit(openaiConfig.threadCount);
 
@@ -260,7 +279,8 @@ async function main(): Promise<void> {
       ]);
     } catch {
       logger.error('因致命错误，任务已中止');
-      process.exit(1);
+      fatalAborted = true;
+      fileResults = await Promise.allSettled(tasks);
     }
 
     for (const settled of fileResults) {
@@ -289,12 +309,14 @@ async function main(): Promise<void> {
 
     if (signal.aborted) {
       logger.error('因致命错误，任务已中止');
-      process.exit(1);
+      fatalAborted = true;
     }
 
-    targetLogger.info(`目标语言 ${target.fullName} (${targetLang}) 处理完成`);
+    if (!fatalAborted) {
+      targetLogger.info(`目标语言 ${target.fullName} (${targetLang}) 处理完成`);
+    }
 
-    if (fileConfig.copyOtherFiles) {
+    if (fileConfig.copyOtherFiles && !fatalAborted) {
       const outputFolder = path.join(outputBaseFolder, targetLang);
       const copiedFiles = await copyOtherFiles(inputFolder, outputFolder, targetLogger);
       for (const f of copiedFiles) {
@@ -303,8 +325,17 @@ async function main(): Promise<void> {
       totalCopiedFiles += copiedFiles.length;
     }
 
-    await cleanupOutputFolder(path.join(outputBaseFolder, targetLang), outputFilesRecord, targetLogger);
+    if (!fatalAborted) {
+      await cleanupOutputFolder(path.join(outputBaseFolder, targetLang), outputFilesRecord, targetLogger);
+    }
+
+    currentController = null;
+
+    if (fatalAborted) break;
   }
+
+  currentController = null;
+  process.off('SIGINT', onSigint);
 
   const totalElapsed = Date.now() - startTime;
   logger.info('=== 所有文件翻译完成 ===');
@@ -340,6 +371,11 @@ async function main(): Promise<void> {
     };
     const report = createReportData(summary, fileReports, errorEntries);
     await writeReport(report);
+  }
+
+  if (fatalAborted) {
+    logger.error('程序因错误而中止');
+    process.exit(1);
   }
 }
 
@@ -569,7 +605,7 @@ async function translateFrontMatter(
   };
 }
 
-main().catch((error) => {
+main().catch(async (error) => {
   logger.error('程序执行失败', error);
   process.exit(1);
 });
