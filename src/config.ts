@@ -98,6 +98,7 @@ export const translationConfig: TranslationConfig = {
     /^\+\+\+(primary|danger|warning) /gm, // 折叠快开头
     /^\+\+\+$/gm,                         // 折叠块结束
     /^:::(warning|success|info|primary)?\s*$/gm,
+    /!\[[^\]]*?\]\([^)]*?\)/g,            // 图片
 
     // /`[^`]+`/g,                        // 行内代码
     /\$\$[\s\S]*?\$\$/g,                  // 数学公式块
@@ -116,6 +117,11 @@ export const translationConfig: TranslationConfig = {
     {
       // 匹配 front-matter 指定字段，有匹配则跳过
       field: 'draft',
+      fieldPattern: /^true$/i,
+    },
+    {
+      // 匹配 front-matter 指定字段，有匹配则跳过
+      field: 'translation',
       fieldPattern: /^true$/i,
     },
     {
@@ -180,7 +186,7 @@ AIモデル **{model}** による翻訳。
  */
 export const openaiConfig: OpenAIConfig = {
   // API Key - 建议通过环境变量 OPENAI_API_KEY 设置
-  apiKey: getEnvString('OPENAI_API_KEY', 'sk-fgvymgrplbdychhplgzavprlkvhxloticxennehpastjetlf'),
+  apiKey: getEnvString('OPENAI_API_KEY', 'sk-wryskmzaeffdlfsicaezzbztclyueomazlofusyelvllsmvw'),
   // API 基础地址
   baseURL: getEnvString('OPENAI_BASE_URL', 'https://api.siliconflow.cn/v1'),
   // 模型名称
