@@ -77,6 +77,7 @@ function buildOutputContent(
     indent: 2,
     sortKeys: false,
     noRefs: true,
+    lineWidth: -1,
   });
 
   return `---\n${yamlStr}---\n\n${body}`;
