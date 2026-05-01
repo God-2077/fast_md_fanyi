@@ -1,3 +1,5 @@
+import 'dotenv/config';
+
 /**
  * 翻译工具主入口
  * 批量将 Markdown 文件从源语言翻译到多个目标语言
