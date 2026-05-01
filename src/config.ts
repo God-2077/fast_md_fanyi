@@ -35,6 +35,18 @@ function getEnvBool(key: string, defaultValue: boolean): boolean {
   return val === 'true';
 }
 
+/**
+ * 读取数字型环境变量
+ * - 未定义 → 使用 defaultValue
+ * - 无法解析 → 使用 defaultValue
+ */
+function getEnvNumber(key: string, defaultValue: number): number {
+  const val = process.env[key];
+  if (val === undefined) return defaultValue;
+  const num = Number(val);
+  return Number.isFinite(num) ? num : defaultValue;
+}
+
 // ========== 配置对象 ==========
 
 /**
@@ -111,7 +123,7 @@ export const translationConfig: TranslationConfig = {
   ],
   // 是否让 preservedTerms 使用和 preservedFields 一样的 <PTX_> 占位符格式
   // 设为 true 时，术语占位符会像字段一样使用简短ID，而不是包含原文的 <TERM_xxx> 格式
-  preservedTermsUseFieldPlaceholder: true,
+  preservedTermsUseFieldPlaceholder: getEnvBool('TRANSLATION_PRESERVED_TERMS_PLACEHOLDER', true),
   // 跳过翻译匹配配置
   skipMatches: [
     {
@@ -178,7 +190,7 @@ AIモデル **{model}** による翻訳。
   },
   // 智能分块最大字符数（超过时自动分块翻译）
   // 设为 0 或不设置则禁用分块
-  maxCharLength: 25000,
+  maxCharLength: getEnvNumber('TRANSLATION_MAX_CHAR_LENGTH', 25000),
 };
 
 /**
@@ -193,11 +205,11 @@ export const openaiConfig: OpenAIConfig = {
   model: getEnvString('OPENAI_MODEL', 'Qwen/Qwen3-8B'),
 //   Qwen/Qwen3-8B Qwen/Qwen2.5-7B-Instruct
   // 温度参数 (0-1)
-  temperature: 0.5,
+  temperature: getEnvNumber('OPENAI_TEMPERATURE', 0.5),
   // 最大输出 token 数
-  maxTokens: 1000,
+  maxTokens: getEnvNumber('OPENAI_MAX_TOKENS', 1000),
   // 是否使用流式输出
-  stream: true,
+  stream: getEnvBool('OPENAI_STREAM', true),
   // Markdown 内容翻译的系统提示词模板
   markdownPromptTemplate: `You are translation assistant. You will translate the original text from {sourceLanguage} into {targetLanguage}, strictly following the mandatory rules below:
 
@@ -221,41 +233,41 @@ export const openaiConfig: OpenAIConfig = {
   // promptTemplate: ...
 
   // 请求超时时间（毫秒）
-  timeout: 1000 * 60, // 5 分钟
+  timeout: getEnvNumber('OPENAI_TIMEOUT', 1000 * 60), // 5 分钟
   // 并发请求数
-  threadCount: 2,
+  threadCount: getEnvNumber('OPENAI_THREAD_COUNT', 2),
   // 重试次数
-  retryCount: 3,
+  retryCount: getEnvNumber('OPENAI_RETRY_COUNT', 3),
   // 是否检测乱码
-  checkMangledCode: true,
+  checkMangledCode: getEnvBool('OPENAI_CHECK_MANGLED', true),
   // 智能 maxTokens（根据内容长度动态调整）
   // 如需自定义计算逻辑，可修改 calculateSmartTokens 函数
-  smartTokens: true,
+  smartTokens: getEnvBool('OPENAI_SMART_TOKENS', true),
   // 智能 timeout（根据内容长度动态调整）
   // 如需自定义计算逻辑，可修改 calculateSmartTokens 函数
-  smartTimeout: true,
+  smartTimeout: getEnvBool('OPENAI_SMART_TIMEOUT', true),
   // 达到最大重试次数时的行为
-  maxRetriesBehavior: 'skip', // 'skip' 跳过该文件继续下一个, 'exit' 退出程序
+  maxRetriesBehavior: getEnvString('OPENAI_MAX_RETRIES_BEHAVIOR', 'skip') as 'skip' | 'exit',
   // 连续错误次数限制
-  maxConsecutiveErrors: 5, // 连续失败5个文件后退出
+  maxConsecutiveErrors: getEnvNumber('OPENAI_MAX_CONSECUTIVE_ERRORS', 5),
   // 429 速率限制等待时间（毫秒）
-  rateLimitWait: 10000, // 默认10秒
+  rateLimitWait: getEnvNumber('OPENAI_RATE_LIMIT_WAIT', 10000), // 默认10秒
   // 模拟模式（调试时不发起真实请求）
   mock: getEnvBool('OPENAI_MOCK', false),
   // 模拟模式耗时（毫秒），设为 0 则使用随机耗时
-  mockDelay: 0,
+  mockDelay: getEnvNumber('OPENAI_MOCK_DELAY', 0),
 };
 
 /**
  * 文件配置
  */
 export const fileConfig: FileConfig = {
-  inputFolder: 'input',
+  inputFolder: getEnvString('INPUT_FOLDER', 'input'),
   ignore: ['node_modules', 'dist', 'output', '.git', '.DS_Store', 'translation-report-*.json', ...(translationConfig.targets.map(target => `${target.shortName}/**/*`))],
-  outputFolder: 'output',
-  preserveFolders: true,
-  copyOtherFiles: true,
-  skipUnchanged: true,
+  outputFolder: getEnvString('OUTPUT_FOLDER', 'output'),
+  preserveFolders: getEnvBool('FILE_PRESERVE_FOLDERS', true),
+  copyOtherFiles: getEnvBool('FILE_COPY_OTHER_FILES', true),
+  skipUnchanged: getEnvBool('FILE_SKIP_UNCHANGED', true),
 };
 
 /**

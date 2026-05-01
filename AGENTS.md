@@ -27,7 +27,27 @@ pnpm clean        # Remove dist/
 | `OPENAI_API_KEY` | API key (also has a hardcoded fallback in config.ts) | — |
 | `OPENAI_BASE_URL` | API base URL | `https://api.siliconflow.cn/v1` |
 | `OPENAI_MODEL` | Model name | `Qwen/Qwen3-8B` |
+| `OPENAI_TEMPERATURE` | Temperature (0-1) | `0.5` |
+| `OPENAI_MAX_TOKENS` | Max output tokens (when smartTokens is off) | `1000` |
+| `OPENAI_STREAM` | Use streaming API responses | `true` |
+| `OPENAI_TIMEOUT` | Request timeout in ms | `60000` |
+| `OPENAI_THREAD_COUNT` | Concurrent request count | `2` |
+| `OPENAI_RETRY_COUNT` | Max retries per request | `3` |
+| `OPENAI_CHECK_MANGLED` | Detect mangled/garbled output | `true` |
+| `OPENAI_SMART_TOKENS` | Dynamically compute maxTokens from input size | `true` |
+| `OPENAI_SMART_TIMEOUT` | Dynamically compute timeout from input size | `true` |
+| `OPENAI_MAX_RETRIES_BEHAVIOR` | Behavior after max retries: `skip` or `exit` | `skip` |
+| `OPENAI_MAX_CONSECUTIVE_ERRORS` | Max consecutive failures before abort | `5` |
+| `OPENAI_RATE_LIMIT_WAIT` | Wait time for 429 rate limit in ms | `10000` |
 | `OPENAI_MOCK` | Mock mode (no real API calls) | `false` |
+| `OPENAI_MOCK_DELAY` | Mock mode artificial delay in ms (0 = random) | `0` |
+| `TRANSLATION_MAX_CHAR_LENGTH` | Max chars before chunking (0 = disable) | `25000` |
+| `TRANSLATION_PRESERVED_TERMS_PLACEHOLDER` | Use <PTX_> placeholders for preserved terms | `true` |
+| `INPUT_FOLDER` | Input directory path | `input` |
+| `OUTPUT_FOLDER` | Output directory path | `output` |
+| `FILE_PRESERVE_FOLDERS` | Preserve folder structure in output | `true` |
+| `FILE_COPY_OTHER_FILES` | Copy non-markdown files to output | `true` |
+| `FILE_SKIP_UNCHANGED` | Skip files with unchanged source hash | `true` |
 | `LOG_LEVEL` | debug\|info\|warn\|error | `debug` |
 | `LOG_TO_FILE` | Write logs to file | `true` |
 | `LOG_FILE_PATH` | Log file path | `./logs/app.log` |
