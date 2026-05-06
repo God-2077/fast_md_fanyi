@@ -401,6 +401,34 @@ function parseFrontMatter(content: string): { attributes: Record<string, unknown
 }
 
 /**
+ * 计算内容 hash：全文件 hash、body hash、各 front-matter 字段 hash
+ */
+function computeHashes(
+  rawMarkdown: string,
+  rawBody: string,
+  rawFrontMatter: Record<string, unknown>,
+): { fullHash: string; bodyHash: string; fieldHashes: Record<string, string> } {
+  const fullHash = crypto.createHash('sha256').update(rawMarkdown).digest('hex');
+  const bodyHash = crypto.createHash('sha256').update(rawBody).digest('hex');
+  const fieldHashes: Record<string, string> = {};
+  for (const fc of translationConfig.frontMatter) {
+    const val = rawFrontMatter[fc.field];
+    if (val === undefined || val === null) continue;
+    const input = fc.type === 'string[]' ? JSON.stringify(val) : String(val);
+    fieldHashes[fc.field] = crypto.createHash('sha256').update(input).digest('hex');
+  }
+  return { fullHash, bodyHash, fieldHashes };
+}
+
+/**
+ * 从已有输出文件内容中提取 body 部分（去除 YAML front-matter）
+ */
+function extractOutputBody(existingContent: string): string {
+  const match = existingContent.match(/^---\n[\s\S]*?\n---\n\n?([\s\S]*)$/);
+  return match ? match[1] : existingContent;
+}
+
+/**
  * 处理单个 Markdown 文件
  */
 function shouldSkipTranslation(
@@ -461,10 +489,19 @@ async function processMarkdownFile(
     return { outputPath: '', skipped: true, sourceHash: '', skipReason: 'file content empty' };
   }
 
-  const contentHash = crypto.createHash('sha256').update(markdownContent).digest('hex');
-
   const relativePath = path.relative(inputFolder, filePath);
   const outputPath = path.join(outputBaseFolder, targetLang, relativePath);
+
+  const parsedContent = parseFrontMatter(markdownContent);
+  const rawFrontMatter = parsedContent.attributes || {};
+  const rawMarkdownBody = parsedContent.body || '';
+
+  const { fullHash, bodyHash, fieldHashes } = computeHashes(markdownContent, rawMarkdownBody, rawFrontMatter);
+
+  let needsBodyTranslation = !!rawMarkdownBody.trim();
+  let fieldsToTranslate = translationConfig.frontMatter.map(f => f.field);
+  let existingFinalBody = '';
+  let existingFrontMatter: Record<string, unknown> = {};
 
   if (fileConfig.skipUnchanged) {
     try {
@@ -472,22 +509,49 @@ async function processMarkdownFile(
       const parsed = parseFrontMatter(existingContent);
       const existingMeta = parsed.attributes.translationMeta as TranslationMeta | undefined;
 
-      if (existingMeta?.sourceHash === contentHash) {
+      if (existingMeta?.sourceHash === fullHash) {
         fileLogger.info(`原文未变更，跳过翻译: ${path.basename(outputPath)}`);
-        return { outputPath, skipped: true, sourceHash: contentHash, skipReason: 'source content unchanged' };
+        return { outputPath, skipped: true, sourceHash: fullHash, skipReason: 'source content unchanged' };
+      }
+
+      existingFrontMatter = parsed.attributes;
+
+      if (existingMeta?.bodyHash !== undefined && existingMeta?.fieldHashes !== undefined) {
+        needsBodyTranslation = existingMeta.bodyHash !== bodyHash;
+
+        fieldsToTranslate = [];
+        for (const fc of translationConfig.frontMatter) {
+          const newHash = fieldHashes[fc.field];
+          const oldHash = existingMeta.fieldHashes![fc.field];
+          if (oldHash === undefined || oldHash !== newHash) {
+            fieldsToTranslate.push(fc.field);
+          }
+        }
+
+        if (!needsBodyTranslation && fieldsToTranslate.length === 0) {
+          fileLogger.info(`原文未变更，跳过翻译: ${path.basename(outputPath)}`);
+          return { outputPath, skipped: true, sourceHash: fullHash, skipReason: 'source content unchanged (incremental)' };
+        }
+
+        if (!needsBodyTranslation) {
+          existingFinalBody = extractOutputBody(existingContent);
+          fileLogger.debug('Body 内容未变更，复用已有翻译');
+        }
+
+        for (const fc of translationConfig.frontMatter) {
+          if (!fieldsToTranslate.includes(fc.field)) {
+            fileLogger.debug(`字段 "${fc.field}" 未变更，复用已有翻译`);
+          }
+        }
       }
     } catch {
       // 文件不存在，继续翻译
     }
   }
 
-  const parsedContent = parseFrontMatter(markdownContent);
-  const rawFrontMatter = parsedContent.attributes || {};
-  const rawMarkdownBody = parsedContent.body || '';
-
   if (shouldSkipTranslation(rawFrontMatter, rawMarkdownBody, fileLogger)) {
     fileLogger.info(`跳过翻译: ${path.basename(outputPath)} (匹配跳过规则)`);
-    return { outputPath, skipped: true, sourceHash: contentHash, skipReason: 'matched skip rule' };
+    return { outputPath, skipped: true, sourceHash: fullHash, skipReason: 'matched skip rule' };
   }
 
   const { frontMatter: processedFrontMatter, usage: frontMatterUsage } = await translateFrontMatter(
@@ -496,12 +560,14 @@ async function processMarkdownFile(
     targetLanguage,
     translationService,
     fileLogger,
-    taskId
+    taskId,
+    fieldsToTranslate,
+    existingFrontMatter
   );
 
   let translatedBody = rawMarkdownBody;
   let bodyUsage: { totalTokens: number } | undefined;
-  if (rawMarkdownBody.trim()) {
+  if (needsBodyTranslation && rawMarkdownBody.trim()) {
     const bodyResult = await translationService.translateMarkdown(
       rawMarkdownBody,
       sourceLang,
@@ -515,27 +581,34 @@ async function processMarkdownFile(
   processedFrontMatter.translationMeta = {
     translatedAt: new Date().toISOString(),
     model: openaiConfig.model,
-    sourceHash: contentHash,
+    sourceHash: fullHash,
+    bodyHash,
+    fieldHashes,
   };
 
-  let finalBody = translatedBody;
-  const headerFooterConfig = translationConfig.headerFooter;
-  if (headerFooterConfig) {
-    const specificConfig = headerFooterConfig[targetLang] || headerFooterConfig.default;
-    const replacements = {
-      model: openaiConfig.model,
-      local: formatLocalTime('display'),
-      targetLanguage: targetLanguage,
-      sourceLanguage: sourceLang,
-      targetLang,
-      sourceLang: sourceShortName,
-    };
-    const { header, footer } = formatHeaderFooter(specificConfig, replacements);
-    if (header) {
-      finalBody = header + '\n\n' + finalBody;
-    }
-    if (footer) {
-      finalBody = finalBody + '\n\n' + footer;
+  let finalBody: string;
+  if (!needsBodyTranslation && existingFinalBody) {
+    finalBody = existingFinalBody;
+  } else {
+    finalBody = translatedBody;
+    const headerFooterConfig = translationConfig.headerFooter;
+    if (headerFooterConfig) {
+      const specificConfig = headerFooterConfig[targetLang] || headerFooterConfig.default;
+      const replacements = {
+        model: openaiConfig.model,
+        local: formatLocalTime('display'),
+        targetLanguage: targetLanguage,
+        sourceLanguage: sourceLang,
+        targetLang,
+        sourceLang: sourceShortName,
+      };
+      const { header, footer } = formatHeaderFooter(specificConfig, replacements);
+      if (header) {
+        finalBody = header + '\n\n' + finalBody;
+      }
+      if (footer) {
+        finalBody = finalBody + '\n\n' + footer;
+      }
     }
   }
 
@@ -550,7 +623,7 @@ async function processMarkdownFile(
   return {
     outputPath,
     skipped: false,
-    sourceHash: contentHash,
+    sourceHash: fullHash,
     usage: totalUsage > 0 ? { totalTokens: totalUsage } : undefined,
   };
 }
@@ -564,13 +637,23 @@ async function translateFrontMatter(
   targetLanguage: string,
   translationService: TranslationService,
   fileLogger: Logger,
-  taskId?: string
+  taskId?: string,
+  fieldsToTranslate?: string[],
+  existingFrontMatter?: Record<string, unknown>
 ): Promise<{ frontMatter: ProcessedFrontMatter; usage?: { totalTokens: number } }> {
   const processed: ProcessedFrontMatter = { ...frontMatter };
   let totalUsage = 0;
 
   for (const fieldConfig of translationConfig.frontMatter) {
     const { field, type } = fieldConfig;
+
+    if (fieldsToTranslate !== undefined && !fieldsToTranslate.includes(field)) {
+      if (existingFrontMatter && field in existingFrontMatter) {
+        processed[field] = existingFrontMatter[field];
+      }
+      continue;
+    }
+
     const originalValue = frontMatter[field];
 
     if (originalValue === undefined || originalValue === null) {

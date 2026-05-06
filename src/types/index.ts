@@ -305,4 +305,6 @@ export interface TranslationMeta {
   translatedAt: string;
   model: string;
   sourceHash: string;
+  bodyHash?: string;
+  fieldHashes?: Record<string, string>;
 }
