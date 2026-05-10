@@ -1,10 +1,9 @@
-import 'dotenv/config';
-
 /**
  * 翻译工具主入口
  * 批量将 Markdown 文件从源语言翻译到多个目标语言
  */
 
+import './env';
 import { glob } from 'glob';
 import path from 'path';
 import fs from 'fs/promises';
