@@ -60,6 +60,32 @@ async function cleanupOutputFolder(
     }
   }
 
+  // 删除文件后，清理留下的空文件夹（自底向上）
+  async function removeEmptyDirs(dir: string): Promise<void> {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      if (excludedDirs.includes(entry.name)) continue;
+
+      const subDir = path.join(dir, entry.name);
+      await removeEmptyDirs(subDir);
+
+      // 子目录处理后，检查是否变空
+      const remaining = await fs.readdir(subDir);
+      if (remaining.length === 0) {
+        try {
+          await fs.rmdir(subDir);
+          logger.info(`已删除空目录: ${path.relative(outputFolder, subDir)}`);
+        } catch (error) {
+          logger.warn(`删除目录失败: ${subDir}`, error);
+        }
+      }
+    }
+  }
+
+  await removeEmptyDirs(outputFolder);
+
   logger.info(`清理完成，删除了 ${deletedCount} 个文件`);
 }
 
