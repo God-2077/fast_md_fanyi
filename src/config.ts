@@ -134,7 +134,7 @@ export const translationConfig: TranslationConfig = {
     {
       // 匹配 front-matter 指定字段，有匹配则跳过
       field: 'translation',
-      fieldPattern: /^true$/i,
+      fieldPattern: /^false$/i,
     },
     {
       // 匹配 front-matter 指定字段，有匹配则跳过
