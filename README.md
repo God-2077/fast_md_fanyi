@@ -83,6 +83,7 @@ src/
 | | `outputPath` | 报告输出路径 |
 | **logConfig** | `level` | 日志级别 |
 | | `writeToFile` | 是否写入文件 |
+| | `logStreamDelta` | 是否记录流式输出 delta  |
 | | `filePath` | 日志文件路径 |
 
 ---
