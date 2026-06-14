@@ -285,14 +285,26 @@ export class TranslationService {
         if (response.success) {
           const restoredText = restoreText(response.content, dictionary);
           const trimmedText = restoredText.trim();
-          log.info(`翻译成功 (${attempt + 1} 次尝试)`);
-          log.debug(`Translation successful after ${attempt + 1} attempt(s)`);
 
-          return {
-            success: true,
-            translatedText: trimmedText,
-            usage: response.usage,
-          };
+          if (!trimmedText) {
+            lastError = 'API 返回了空译文';
+            allErrors.push(lastError);
+            log.warn(`翻译尝试 ${attempt + 1} 失败: ${lastError}`);
+
+            if (attempt < maxRetries - 1) {
+              await this.delay(1000);
+              continue;
+            }
+          } else {
+            log.info(`翻译成功 (${attempt + 1} 次尝试)`);
+            log.debug(`Translation successful after ${attempt + 1} attempt(s)`);
+
+            return {
+              success: true,
+              translatedText: trimmedText,
+              usage: response.usage,
+            };
+          }
         }
 
         lastError = response.error;
