@@ -276,6 +276,7 @@ export class TranslationService {
           timeout,
           messages,
           checkMangledCode: this.config.checkMangledCode,
+          logStreamDelta: this.config.logStreamDelta,
           taskId,
         };
 

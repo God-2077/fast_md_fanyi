@@ -256,6 +256,8 @@ export const openaiConfig: OpenAIConfig = {
   mock: getEnvBool('OPENAI_MOCK', false),
   // 模拟模式耗时（毫秒），设为 0 则使用随机耗时
   mockDelay: getEnvNumber('OPENAI_MOCK_DELAY', 0),
+  // 是否输出流式响应的每个 delta 块日志（调试用，默认关闭）
+  logStreamDelta: getEnvBool('OPENAI_LOG_STREAM_DELTA', false),
 };
 
 /**

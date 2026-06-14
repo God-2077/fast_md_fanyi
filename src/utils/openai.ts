@@ -59,8 +59,11 @@ async function handleNormalRequest(
   headers: Record<string, string>,
   requestBody: Record<string, unknown>,
   timeout?: number,
-  checkMangledCode?: boolean
+  checkMangledCode?: boolean,
+  log?: Logger
 ): Promise<ResponseData> {
+  const _log = log || logger;
+
   try {
     const response: AxiosResponse = await axios.post(
       `${baseURL}/chat/completions`,
@@ -71,9 +74,9 @@ async function handleNormalRequest(
       }
     );
 
-    return handleJsonResponse(response, checkMangledCode);
+    return handleJsonResponse(response, checkMangledCode, _log);
   } catch (error) {
-    return handleRequestError(error);
+    return handleRequestError(error, _log);
   }
 }
 
@@ -82,16 +85,23 @@ async function handleStreamRequest(
   headers: Record<string, string>,
   requestBody: Record<string, unknown>,
   timeout?: number,
-  checkMangledCode?: boolean
+  checkMangledCode?: boolean,
+  log?: Logger,
+  logStreamDelta?: boolean
 ): Promise<ResponseData> {
+  const _log = log || logger;
+
   return new Promise((resolve) => {
     let fullContent = '';
     let fullReasoningContent = '';
     let lastUsage: ResponseData['usage'] = undefined;
     let resolved = false;
+    let chunkCount = 0;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout || 30000);
+
+    _log.debug('OpenAI API 开始流式请求');
 
     axios.post(`${baseURL}/chat/completions`, requestBody, {
       headers: {
@@ -120,6 +130,8 @@ async function handleStreamRequest(
             if (!resolved) {
               resolved = true;
               clearTimeout(timeoutId);
+              _log.debug(`OpenAI API 流式响应完成, 共收到 ${chunkCount} 个 delta, 内容总长度: ${fullContent.length}`);
+              _log.debug(`OpenAI API 返回原文: ${fullContent}`);
               resolve({
                 status: 200,
                 success: true,
@@ -147,9 +159,16 @@ async function handleStreamRequest(
 
             if (content) {
               fullContent += content;
+              chunkCount++;
+              if (logStreamDelta) {
+                _log.debug(`OpenAI API 流式响应 delta[${chunkCount}]: ${content}`);
+              }
             }
             if (reasoningContent) {
               fullReasoningContent += reasoningContent;
+              if (logStreamDelta) {
+                _log.debug(`OpenAI API 流式响应 reasoning delta: ${reasoningContent}`);
+              }
             }
 
             if (content || reasoningContent) {
@@ -164,6 +183,7 @@ async function handleStreamRequest(
                 clearTimeout(timeoutId);
                 if (!resolved) {
                   resolved = true;
+                  _log.warn(`OpenAI API 流式响应质量问题: ${checkResult.error}`);
                   resolve({
                     status: 400,
                     success: false,
@@ -184,6 +204,8 @@ async function handleStreamRequest(
         if (!resolved) {
           resolved = true;
           clearTimeout(timeoutId);
+          _log.debug(`OpenAI API 流式响应完成, 共收到 ${chunkCount} 个 delta, 内容总长度: ${fullContent.length}`);
+          _log.debug(`OpenAI API 返回原文: ${fullContent}`);
           resolve({
             status: 200,
             success: true,
@@ -198,6 +220,7 @@ async function handleStreamRequest(
         if (!resolved) {
           resolved = true;
           clearTimeout(timeoutId);
+          _log.error(`OpenAI API 流式错误: ${error.message}`);
           resolve({
             status: 500,
             success: false,
@@ -211,25 +234,31 @@ async function handleStreamRequest(
       if (!resolved) {
         resolved = true;
         clearTimeout(timeoutId);
-        resolve(handleRequestError(error));
+        resolve(handleRequestError(error, _log));
       }
     });
   });
 }
 
-function handleJsonResponse(response: AxiosResponse, checkMangledCode?: boolean): ResponseData {
+function handleJsonResponse(response: AxiosResponse, checkMangledCode?: boolean, log?: Logger): ResponseData {
+  const _log = log || logger;
   const { status, data } = response;
 
-  logger.debug(`OpenAI API 响应状态: ${status}`);
-  logger.debug(`OpenAI API 响应数据: ${JSON.stringify(data)}`);
+  _log.debug(`OpenAI API 响应状态: ${status}`);
+  _log.debug(`OpenAI API 响应数据: ${JSON.stringify(data)}`);
 
   if (status === 200 && data.choices && data.choices.length > 0) {
     const content = data.choices[0]?.message?.content || '';
     const reasoningContent = data.choices[0]?.message?.reasoning_content || '';
 
+    _log.debug(`OpenAI API 返回原文: ${content}`);
+    if (reasoningContent) {
+      _log.debug(`OpenAI API 返回推理原文: ${reasoningContent}`);
+    }
+
     const contentCheck = checkContentQuality(content, checkMangledCode, 'content');
     if (contentCheck) {
-      logger.warn(`OpenAI API 响应内容质量问题: ${contentCheck.error}`);
+      _log.warn(`OpenAI API 响应内容质量问题: ${contentCheck.error}`);
       return {
         status: 400,
         success: false,
@@ -240,7 +269,7 @@ function handleJsonResponse(response: AxiosResponse, checkMangledCode?: boolean)
 
     const reasoningCheck = checkContentQuality(reasoningContent, checkMangledCode, 'reasoning');
     if (reasoningCheck) {
-      logger.warn(`OpenAI API 响应推理内容质量问题: ${reasoningCheck.error}`);
+      _log.warn(`OpenAI API 响应推理内容质量问题: ${reasoningCheck.error}`);
       return {
         status: 400,
         success: false,
@@ -249,7 +278,7 @@ function handleJsonResponse(response: AxiosResponse, checkMangledCode?: boolean)
       };
     }
 
-    logger.info(`OpenAI API 请求成功，响应状态: ${status}`);
+    _log.info(`OpenAI API 请求成功，响应状态: ${status}`);
     return {
       status,
       success: true,
@@ -263,7 +292,7 @@ function handleJsonResponse(response: AxiosResponse, checkMangledCode?: boolean)
     };
   }
 
-  logger.warn('OpenAI API 响应格式无效');
+  _log.warn('OpenAI API 响应格式无效');
   return {
     status: status || 500,
     success: false,
@@ -274,9 +303,10 @@ function handleJsonResponse(response: AxiosResponse, checkMangledCode?: boolean)
 
 const FATAL_STATUS_CODES = [400, 401, 402, 404, 405, 422, 500];
 
-function classifyError(error: unknown): { classification: 'fatal' | 'retryable'; message: string; status: number } {
+function classifyError(error: unknown): { classification: 'fatal' | 'retryable'; message: string; status: number; rawBody?: string } {
   let status = 500;
   let message = 'Unknown error';
+  let rawBody: string | undefined;
 
   if (error instanceof AxiosError) {
     if (error.response) {
@@ -284,6 +314,7 @@ function classifyError(error: unknown): { classification: 'fatal' | 'retryable';
       const errorData = error.response.data;
       let dataStr = '';
       try { dataStr = JSON.stringify(errorData); } catch { /* circular structure, ignore */ }
+      rawBody = dataStr;
       message = errorData?.error?.message ||
                 errorData?.error?.type ||
                 dataStr ||
@@ -308,18 +339,18 @@ function classifyError(error: unknown): { classification: 'fatal' | 'retryable';
     }
 
     if (status === 429) {
-      return { classification: 'retryable', message: `Rate limited (429): ${message}`, status };
+      return { classification: 'retryable', message: `Rate limited (429): ${message}`, status, rawBody };
     }
 
     if (FATAL_STATUS_CODES.includes(status)) {
-      return { classification: 'fatal', message, status };
+      return { classification: 'fatal', message, status, rawBody };
     }
 
     if (status === 0) {
-      return { classification: 'retryable', message, status };
+      return { classification: 'retryable', message, status, rawBody };
     }
 
-    return { classification: 'retryable', message, status };
+    return { classification: 'retryable', message, status, rawBody };
   }
 
   if (error instanceof Error) {
@@ -338,10 +369,14 @@ function classifyError(error: unknown): { classification: 'fatal' | 'retryable';
   return { classification: 'fatal', message, status };
 }
 
-function handleRequestError(error: unknown): ResponseData {
-  const { classification, message, status } = classifyError(error);
+function handleRequestError(error: unknown, log?: Logger): ResponseData {
+  const _log = log || logger;
+  const { classification, message, status, rawBody } = classifyError(error);
 
-  logger.error(`OpenAI API 请求失败: ${message} [${classification}]`);
+  _log.error(`OpenAI API 请求失败: ${message} [${classification}]`);
+  if (rawBody) {
+    _log.debug(`OpenAI API 错误响应原文: ${rawBody}`);
+  }
 
   return {
     status,

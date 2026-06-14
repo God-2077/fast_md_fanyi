@@ -92,6 +92,7 @@ export interface OpenAIConfig {
   maxRetriesBehavior: 'skip' | 'exit';
   maxConsecutiveErrors: number;
   rateLimitWait: number;
+  logStreamDelta: boolean;
   mock?: boolean;
   mockDelay?: number;
 }
@@ -202,6 +203,7 @@ export interface FetchOpenAIConfig {
   timeout: number;
   messages: Message[];
   checkMangledCode?: boolean;
+  logStreamDelta?: boolean;
   taskId?: string;
 }
 

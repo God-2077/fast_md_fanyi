@@ -77,10 +77,10 @@ async function fetchOpenAIData(config: FetchOpenAIConfig): Promise<ResponseData>
 
   if (stream) {
     requestBody.stream = true;
-    return handleStreamRequest(baseURL, headers, requestBody, timeout, checkMangledCode);
+    return handleStreamRequest(baseURL, headers, requestBody, timeout, checkMangledCode, log, config.logStreamDelta);
   }
 
-  return handleNormalRequest(baseURL, headers, requestBody, timeout, checkMangledCode);
+  return handleNormalRequest(baseURL, headers, requestBody, timeout, checkMangledCode, log);
 }
 
 function createTranslateMessages(systemPrompt: string, content: string): Message[] {
