@@ -273,6 +273,7 @@ export class TranslationService {
           temperature: this.config.temperature,
           maxTokens,
           stream: this.config.stream,
+          customBody: this.config.customBody,
           timeout,
           messages,
           checkMangledCode: this.config.checkMangledCode,

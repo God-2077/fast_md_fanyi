@@ -18,6 +18,7 @@ async function fetchOpenAIData(config: FetchOpenAIConfig): Promise<ResponseData>
     temperature,
     maxTokens,
     stream,
+    customBody,
     timeout,
     messages,
     checkMangledCode,
@@ -69,6 +70,7 @@ async function fetchOpenAIData(config: FetchOpenAIConfig): Promise<ResponseData>
     messages,
     temperature: temperature ?? 0.7,
     max_tokens: maxTokens ?? 2048,
+    ...customBody,
   };
 
   log.debug(`OpenAI API 请求体: ${JSON.stringify(requestBody)}`);

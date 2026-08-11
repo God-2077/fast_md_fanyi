@@ -212,6 +212,8 @@ export const openaiConfig: OpenAIConfig = {
   maxTokens: getEnvNumber('OPENAI_MAX_TOKENS', 1000),
   // 是否使用流式输出
   stream: getEnvBool('OPENAI_STREAM', true),
+  // 自定义请求体
+  customBody: JSON.parse(getEnvString('OPENAI_CUSTOM_BODY', '{}')),
   // Markdown 内容翻译的系统提示词模板
   markdownPromptTemplate: `You are translation assistant. You will translate the original text from {sourceLanguage} into {targetLanguage}, strictly following the mandatory rules below:
 
