@@ -87,6 +87,7 @@ async function handleStreamRequest(
   timeout?: number,
   checkMangledCode?: boolean,
   log?: Logger,
+  printEveryStream?: boolean,
   logStreamDelta?: boolean
 ): Promise<ResponseData> {
   const _log = log || logger;
@@ -125,6 +126,10 @@ async function handleStreamRequest(
           }
 
           const data = trimmedLine.slice(6);
+
+          if (printEveryStream) {
+            _log.debug(`OpenAI API 流式响应 delta[${chunkCount}]: ${data}`);
+          }
 
           if (data === '[DONE]') {
             if (!resolved) {

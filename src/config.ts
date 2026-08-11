@@ -56,9 +56,11 @@ export const logConfig = {
   level: getEnvString('LOG_LEVEL', 'debug') as LogLevel,
   writeToFile: getEnvBool('LOG_TO_FILE', true),
   filePath: getEnvString('LOG_FILE_PATH', './logs/app-{local}.log'),
+  printEveryStream: getEnvBool('LOG_PRINT_EVERY_STREAM', false),
 };
 
 export const logLevelConfig: LogLevel = logConfig.level;
+export const printEveryStreamConfig: boolean = logConfig.printEveryStream;
 
 /**
  * 翻译配置

@@ -6,7 +6,7 @@
 import type { FetchOpenAIConfig, ResponseData, Message } from '../types';
 import { handleNormalRequest, handleStreamRequest } from '../utils/openai';
 import { Logger } from '../utils/logger';
-import { logLevelConfig, openaiConfig } from '../config';
+import { logLevelConfig, printEveryStreamConfig, openaiConfig } from '../config';
 
 const logger = new Logger(logLevelConfig, 'openai');
 
@@ -77,7 +77,7 @@ async function fetchOpenAIData(config: FetchOpenAIConfig): Promise<ResponseData>
 
   if (stream) {
     requestBody.stream = true;
-    return handleStreamRequest(baseURL, headers, requestBody, timeout, checkMangledCode, log, config.logStreamDelta);
+    return handleStreamRequest(baseURL, headers, requestBody, timeout, checkMangledCode, log, printEveryStreamConfig, config.logStreamDelta);
   }
 
   return handleNormalRequest(baseURL, headers, requestBody, timeout, checkMangledCode, log);
