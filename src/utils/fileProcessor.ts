@@ -6,8 +6,32 @@ import path from 'path';
 import fs from 'fs/promises';
 import yaml from 'js-yaml';
 import type { ProcessedFrontMatter } from '../types';
-import { fileConfig } from '../config';
+import { fileConfig, translationConfig } from '../config';
 import { Logger } from './logger';
+
+const DEFAULT_EXCLUDED_DIRS = ['node_modules', 'dist', 'output', '.git', '.DS_Store'];
+
+/**
+ * 构建需要跳过的目录名集合。
+ * includeTargetLanguages 为 true 时同时跳过目标语言目录，避免在输入输出同目录时
+ * 把已有译文（{lang}/**）当作源文件再次复制。
+ */
+function getExcludedDirNames(includeTargetLanguages: boolean): Set<string> {
+  const names = new Set<string>(DEFAULT_EXCLUDED_DIRS);
+
+  for (const pattern of fileConfig.ignore || []) {
+    if (/[*?/\\]/.test(pattern)) continue;
+    names.add(pattern);
+  }
+
+  if (includeTargetLanguages) {
+    for (const target of translationConfig.targets) {
+      names.add(target.shortName);
+    }
+  }
+
+  return names;
+}
 
 async function cleanupOutputFolder(
   outputFolder: string,
@@ -16,7 +40,7 @@ async function cleanupOutputFolder(
 ): Promise<void> {
   logger.info('正在清理未记录的文件...');
 
-  const excludedDirs = fileConfig.ignore || ['node_modules', '.git', 'output', '.DS_Store'];
+  const excludedDirs = getExcludedDirNames(false);
   let deletedCount = 0;
 
   async function scanDir(dir: string): Promise<string[]> {
@@ -27,7 +51,7 @@ async function cleanupOutputFolder(
       const fullPath = path.join(dir, entry.name);
 
       if (entry.isDirectory()) {
-        if (excludedDirs.includes(entry.name)) continue;
+        if (excludedDirs.has(entry.name)) continue;
         const subFiles = await scanDir(fullPath);
         files.push(...subFiles);
         if (subFiles.length === 0) {
@@ -66,7 +90,7 @@ async function cleanupOutputFolder(
 
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
-      if (excludedDirs.includes(entry.name)) continue;
+      if (excludedDirs.has(entry.name)) continue;
 
       const subDir = path.join(dir, entry.name);
       await removeEmptyDirs(subDir);
@@ -116,7 +140,7 @@ async function copyOtherFiles(
 ): Promise<string[]> {
   logger.info('正在复制其他文件...');
 
-  const excludedDirs = fileConfig.ignore || ['node_modules', '.git', 'output', '.DS_Store'];
+  const excludedDirs = getExcludedDirNames(true);
   const copiedFiles: string[] = [];
 
   async function scanDir(dir: string): Promise<string[]> {
@@ -127,7 +151,7 @@ async function copyOtherFiles(
       const fullPath = path.join(dir, entry.name);
 
       if (entry.isDirectory()) {
-        if (excludedDirs.includes(entry.name)) continue;
+        if (excludedDirs.has(entry.name)) continue;
         const subFiles = await scanDir(fullPath);
         files.push(...subFiles);
       } else if (entry.isFile() && !entry.name.endsWith('.md')) {
