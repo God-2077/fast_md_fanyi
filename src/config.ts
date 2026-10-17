@@ -56,9 +56,11 @@ export const logConfig = {
   level: getEnvString('LOG_LEVEL', 'debug') as LogLevel,
   writeToFile: getEnvBool('LOG_TO_FILE', true),
   filePath: getEnvString('LOG_FILE_PATH', './logs/app-{local}.log'),
+  printEveryStream: getEnvBool('LOG_PRINT_EVERY_STREAM', false),
 };
 
 export const logLevelConfig: LogLevel = logConfig.level;
+export const printEveryStreamConfig: boolean = logConfig.printEveryStream;
 
 /**
  * 翻译配置
@@ -210,6 +212,8 @@ export const openaiConfig: OpenAIConfig = {
   maxTokens: getEnvNumber('OPENAI_MAX_TOKENS', 1000),
   // 是否使用流式输出
   stream: getEnvBool('OPENAI_STREAM', true),
+  // 自定义请求体
+  customBody: JSON.parse(getEnvString('OPENAI_CUSTOM_BODY', '{}')),
   // Markdown 内容翻译的系统提示词模板
   markdownPromptTemplate: `You are translation assistant. You will translate the original text from {sourceLanguage} into {targetLanguage}, strictly following the mandatory rules below:
 

@@ -1,6 +1,6 @@
 {
   "name": "fast_md_fanyi",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "description": "Markdown 文件批量翻译工具",
   "main": "dist/index.js",
   "type": "module",

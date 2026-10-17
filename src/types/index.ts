@@ -77,6 +77,7 @@ export interface OpenAIConfig {
   temperature: number;
   maxTokens: number;
   stream: boolean;
+  customBody: Record<string, unknown>;
   /** @deprecated 使用 markdownPromptTemplate 和 textPromptTemplate 替代 */
   promptTemplate?: string;
   /** Markdown 内容翻译的提示词模板 */
@@ -200,6 +201,7 @@ export interface FetchOpenAIConfig {
   temperature: number;
   maxTokens: number;
   stream: boolean;
+  customBody: Record<string, unknown>;
   timeout: number;
   messages: Message[];
   checkMangledCode?: boolean;

@@ -6,7 +6,7 @@
 import type { FetchOpenAIConfig, ResponseData, Message } from '../types';
 import { handleNormalRequest, handleStreamRequest } from '../utils/openai';
 import { Logger } from '../utils/logger';
-import { logLevelConfig, openaiConfig } from '../config';
+import { logLevelConfig, printEveryStreamConfig, openaiConfig } from '../config';
 
 const logger = new Logger(logLevelConfig, 'openai');
 
@@ -18,6 +18,7 @@ async function fetchOpenAIData(config: FetchOpenAIConfig): Promise<ResponseData>
     temperature,
     maxTokens,
     stream,
+    customBody,
     timeout,
     messages,
     checkMangledCode,
@@ -69,6 +70,7 @@ async function fetchOpenAIData(config: FetchOpenAIConfig): Promise<ResponseData>
     messages,
     temperature: temperature ?? 0.7,
     max_tokens: maxTokens ?? 2048,
+    ...customBody,
   };
 
   log.debug(`OpenAI API 请求体: ${JSON.stringify(requestBody)}`);
@@ -77,7 +79,7 @@ async function fetchOpenAIData(config: FetchOpenAIConfig): Promise<ResponseData>
 
   if (stream) {
     requestBody.stream = true;
-    return handleStreamRequest(baseURL, headers, requestBody, timeout, checkMangledCode, log, config.logStreamDelta);
+    return handleStreamRequest(baseURL, headers, requestBody, timeout, checkMangledCode, log, printEveryStreamConfig, config.logStreamDelta);
   }
 
   return handleNormalRequest(baseURL, headers, requestBody, timeout, checkMangledCode, log);
