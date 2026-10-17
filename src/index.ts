@@ -7,13 +7,13 @@ import './env';
 import { glob } from 'glob';
 import path from 'path';
 import fs from 'fs/promises';
-import yaml from 'js-yaml';
 import crypto from 'crypto';
 import pLimit from 'p-limit';
 
 import { Logger } from './utils/logger';
 import { translationConfig, openaiConfig, fileConfig, logLevelConfig, reportConfig } from './config';
 import { formatLocalTime, validateConfig, getConfigSummary, cleanupOutputFolder, buildOutputContent, copyOtherFiles, createReportData, writeReport } from './utils';
+import { normalizeLineEndings, parseFrontMatter, extractOutputBody } from './utils/markdown';
 import { TranslationService, TranslationServiceError } from './services/translation';
 import type { ProcessedFrontMatter, TranslationMeta, HeaderFooterSingleConfig, FileReportEntry, ReportSummary, FailedFileEntry } from './types';
 
@@ -383,23 +383,6 @@ async function main(): Promise<void> {
 }
 
 /**
- * 解析 Markdown 文件的 YAML front-matter，使用 JSON_SCHEMA 避免将日期字符串转为 Date 对象
- */
-function parseFrontMatter(content: string): { attributes: Record<string, unknown>; body: string } {
-  const match = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
-  if (!match) {
-    return { attributes: {}, body: content };
-  }
-
-  const yamlStr = match[1];
-  const body = match[2];
-
-  const attributes = (yaml.load(yamlStr, { schema: yaml.JSON_SCHEMA }) as Record<string, unknown>) || {};
-
-  return { attributes, body };
-}
-
-/**
  * 计算内容 hash：全文件 hash、body hash、各 front-matter 字段 hash
  */
 function computeHashes(
@@ -417,14 +400,6 @@ function computeHashes(
     fieldHashes[fc.field] = crypto.createHash('sha256').update(input).digest('hex');
   }
   return { fullHash, bodyHash, fieldHashes };
-}
-
-/**
- * 从已有输出文件内容中提取 body 部分（去除 YAML front-matter）
- */
-function extractOutputBody(existingContent: string): string {
-  const match = existingContent.match(/^---\n[\s\S]*?\n---\n\n?([\s\S]*)$/);
-  return match ? match[1] : existingContent;
 }
 
 /**
@@ -481,7 +456,7 @@ async function processMarkdownFile(
   }
 
   let markdownContent = await fs.readFile(filePath, 'utf-8');
-  markdownContent = markdownContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  markdownContent = normalizeLineEndings(markdownContent);
 
   if (!markdownContent.trim()) {
     fileLogger.warn('文件内容为空，跳过');
@@ -522,7 +497,7 @@ async function processMarkdownFile(
         for (const fc of translationConfig.frontMatter) {
           const newHash = fieldHashes[fc.field];
           const oldHash = existingMeta.fieldHashes![fc.field];
-          if (oldHash === undefined || oldHash !== newHash) {
+          if (oldHash !== newHash) {
             fieldsToTranslate.push(fc.field);
           }
         }

@@ -5,18 +5,8 @@ import crypto from 'crypto';
 import yaml from 'js-yaml';
 import { glob } from 'glob';
 import { fileConfig, translationConfig } from '../config';
+import { normalizeLineEndings, parseFrontMatter } from '../utils/markdown';
 import type { TranslationMeta } from '../types';
-
-function parseFrontMatter(content: string): { attributes: Record<string, unknown>; body: string } {
-  const match = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
-  if (!match) {
-    return { attributes: {}, body: content };
-  }
-  const yamlStr = match[1];
-  const body = match[2];
-  const attributes = (yaml.load(yamlStr, { schema: yaml.JSON_SCHEMA }) as Record<string, unknown>) || {};
-  return { attributes, body };
-}
 
 function computeHashes(
   rawMarkdown: string,
@@ -62,14 +52,34 @@ async function main(): Promise<void> {
   console.log(`模式: ${dryRun ? '预览 (--dry-run)' : '写入'}${force ? ', 强制执行 (--force)' : ''}`);
   console.log('');
 
-  const mdFiles = await glob('**/*.md', { cwd: outputFolder, ignore: ['translation-report-*.json'] });
-  console.log(`找到 ${mdFiles.length} 个输出文件\n`);
+  interface OutputFileEntry {
+    displayPath: string;
+    relPath: string;
+    outputFilePath: string;
+  }
+
+  const outputFiles: OutputFileEntry[] = [];
+  for (const target of translationConfig.targets) {
+    const langFolder = path.join(outputFolder, target.shortName);
+    let relFiles: string[] = [];
+    try {
+      relFiles = await glob('**/*.md', { cwd: langFolder });
+    } catch {
+      continue;
+    }
+    for (const relPath of relFiles) {
+      outputFiles.push({
+        displayPath: `${target.shortName}/${relPath}`,
+        relPath,
+        outputFilePath: path.join(langFolder, relPath),
+      });
+    }
+  }
+  console.log(`找到 ${outputFiles.length} 个输出文件\n`);
 
   const results: MigrateResult[] = [];
 
-  for (const relPath of mdFiles) {
-    const outputFilePath = path.join(outputFolder, relPath);
-
+  for (const { displayPath, relPath, outputFilePath } of outputFiles) {
     try {
       const existingContent = await fs.readFile(outputFilePath, 'utf-8');
       const parsed = parseFrontMatter(existingContent);
@@ -77,7 +87,7 @@ async function main(): Promise<void> {
 
       if (!meta || !meta.sourceHash) {
         results.push({
-          outputFile: relPath,
+          outputFile: displayPath,
           sourceFile: '',
           status: 'skipped_no_meta',
           detail: '无 translationMeta 或 sourceHash',
@@ -87,7 +97,7 @@ async function main(): Promise<void> {
 
       if (meta.bodyHash !== undefined && meta.fieldHashes !== undefined) {
         results.push({
-          outputFile: relPath,
+          outputFile: displayPath,
           sourceFile: '',
           status: 'skipped_already',
           detail: '已包含新格式 hash',
@@ -100,10 +110,10 @@ async function main(): Promise<void> {
 
       try {
         sourceContent = await fs.readFile(sourceFilePath, 'utf-8');
-        sourceContent = sourceContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        sourceContent = normalizeLineEndings(sourceContent);
       } catch {
         results.push({
-          outputFile: relPath,
+          outputFile: displayPath,
           sourceFile: sourceFilePath,
           status: 'skipped_no_source',
           detail: '找不到对应源文件',
@@ -120,7 +130,7 @@ async function main(): Promise<void> {
 
       if (!force && fullHash !== meta.sourceHash) {
         results.push({
-          outputFile: relPath,
+          outputFile: displayPath,
           sourceFile: relPath,
           status: 'skipped_hash_mismatch',
           detail: `源文件已变更 (旧: ${meta.sourceHash.slice(0, 12)}..., 新: ${fullHash.slice(0, 12)}...)`,
@@ -129,7 +139,7 @@ async function main(): Promise<void> {
       }
 
       if (force && fullHash !== meta.sourceHash) {
-        console.warn(`  警告: ${relPath} 源文件已变更，强制更新 hash`);
+        console.warn(`  警告: ${displayPath} 源文件已变更，强制更新 hash`);
       }
 
       meta.bodyHash = bodyHash;
@@ -142,12 +152,12 @@ async function main(): Promise<void> {
         await fs.writeFile(outputFilePath, newContent, 'utf-8');
       }
 
-      results.push({ outputFile: relPath, sourceFile: relPath, status: 'migrated' });
-      console.log(`  ${dryRun ? '[预览] ' : ''}已迁移: ${relPath}`);
+      results.push({ outputFile: displayPath, sourceFile: relPath, status: 'migrated' });
+      console.log(`  ${dryRun ? '[预览] ' : ''}已迁移: ${displayPath}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      results.push({ outputFile: relPath, sourceFile: '', status: 'error', detail: msg });
-      console.error(`  错误: ${relPath} - ${msg}`);
+      results.push({ outputFile: displayPath, sourceFile: '', status: 'error', detail: msg });
+      console.error(`  错误: ${displayPath} - ${msg}`);
     }
   }
 
